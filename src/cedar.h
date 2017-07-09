@@ -15,6 +15,10 @@
 
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
+/**
+ * instead of base[s] + c = t, this impl does base[s] ^ c 
+ */
+
 namespace cedar {
   // typedefs
   typedef unsigned char  uchar;
@@ -157,20 +161,20 @@ namespace cedar {
 
     value_type& update (const char* key)
     { 
-	  return update (key, std::strlen (key)); 
-	}
+      return update (key, std::strlen (key)); 
+    }
 
     value_type& update (const char* key, size_t len, value_type val = value_type (0))
     { 
-	  size_t from (0);
-	  size_t pos (0); 
-	  return update (key, from, pos, len, val); 
+      size_t from (0);
+      size_t pos (0); 
+      return update (key, from, pos, len, val); 
     }
 
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val = value_type (0))
     { 
-	  empty_callback cf; 
-	  return update (key, from, pos, len, val, cf); 
+      empty_callback cf; 
+      return update (key, from, pos, len, val, cf); 
     }
 
     template <typename T>
@@ -235,8 +239,8 @@ namespace cedar {
     void dump (T* result, const size_t result_len) {
       union { int i; value_type x; } b;
       size_t num (0);
-	  size_t from (0);
-	  size_t p (0);
+      size_t from (0);
+      size_t p (0);
       for (b.i = begin (from, p); b.i != CEDAR_NO_PATH; b.i = next (from, p))
         if (num < result_len)
           _set_result (&result[num++], b.x, p, from);
@@ -438,20 +442,20 @@ namespace cedar {
     // find key from double array
     int _find (const char* key, size_t& from, size_t& pos, const size_t len) const {
       for (const uchar* const key_ = reinterpret_cast <const uchar*> (key);
-           pos < len; ) { // follow link
+           pos < len; ++pos ) { // follow link
 #ifdef USE_REDUCED_TRIE
         if (_array[from].value >= 0) break;
 #endif
-        size_t to = static_cast <size_t> (_array[from].base ()); to ^= key_[pos];
+        size_t to = static_cast <size_t> (_array[from].base ()); 
+        to ^= key_[pos];
         if (_array[to].check != static_cast <int> (from)) return CEDAR_NO_PATH;
-        ++pos;
         from = to;
       }
 #ifdef USE_REDUCED_TRIE
       if (_array[from].value >= 0) // get value from leaf
         return pos == len ? _array[from].value : CEDAR_NO_PATH; // only allow integer key
 #endif
-      const node n = _array[_array[from].base () ^ 0];
+      const node& n = _array[_array[from].base () ^ 0];
       if (n.check != static_cast <int> (from)) return CEDAR_NO_VALUE;
       return n.base_;
     }
@@ -600,10 +604,19 @@ namespace cedar {
     uchar* _set_child (uchar* p, const int base, uchar c, const int label = -1) {
       --p;
       if (! c)  { *++p = c; c = _ninfo[base ^ c].sibling; } // 0: terminal
-      if (ORDERED)
-        while (c && c < label) { *++p = c; c = _ninfo[base ^ c].sibling; }
-      if (label != -1) *++p = static_cast <uchar> (label);
-      while (c) { *++p = c; c = _ninfo[base ^ c].sibling; }
+      if (ORDERED) {
+        while (c && c < label) { 
+          *++p = c; 
+          c = _ninfo[base ^ c].sibling; 
+        }
+      }
+      if (label != -1) {
+        *++p = static_cast <uchar> (label);
+      }
+      while (c) { 
+        *++p = c; 
+        c = _ninfo[base ^ c].sibling; 
+      }
       return p;
     }
     // explore new block to settle down
