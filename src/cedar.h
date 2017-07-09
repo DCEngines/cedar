@@ -53,20 +53,18 @@ namespace cedar {
 #endif
     };
     struct ninfo {  // x1.5 update speed; +.25 % memory (8n -> 10n)
-      uchar  sibling;   // right sibling (= 0 if not exist)
-      uchar  child;     // first child
-      ninfo () : sibling (0), child (0) {}
+      uchar  sibling{0};   // right sibling (= 0 if not exist)
+      uchar  child{0};     // first child
     };
     struct block { // a block w/ 256 elements
-      int   prev;   // prev block; 3 bytes
-      int   next;   // next block; 3 bytes
-      short num;    // # empty elements; 0 - 256
-      short reject; // minimum # branching failed to locate; soft limit
-      int   trial;  // # trial
-      int   ehead;  // first empty item
-      block () : prev (0), next (0), num (256), reject (257), trial (0), ehead (0) {}
+      int   prev{0};   // prev block; 3 bytes
+      int   next{0};   // next block; 3 bytes
+      short num{256};    // # empty elements; 0 - 256
+      short reject{257}; // minimum # branching failed to locate; soft limit
+      int   trial{0};  // # trial
+      int   ehead{0};  // first empty item
     };
-    da () : tracking_node (), _array (0), _ninfo (0), _block (0), _bheadF (0), _bheadC (0), _bheadO (0), _capacity (0), _size (0), _no_delete (false), _reject () {
+    explicit da () {
       STATIC_ASSERT(sizeof (value_type) <= sizeof (int),
                     value_type_is_not_supported___maintain_a_value_array_by_yourself_and_store_its_index
                     );
@@ -308,7 +306,7 @@ namespace cedar {
     }
     const void* array () const { return _array; }
     void clear (const bool reuse = true) {
-      if (_array && ! _no_delete) { std::free (_array); _array = 0; }
+      if (_array && not _no_delete) { std::free (_array); _array = 0; }
       if (_ninfo) { std::free (_ninfo); _ninfo = 0; }
       if (_block) { std::free (_block); _block = 0; }
       _bheadF = _bheadC = _bheadO = _capacity = _size = 0; // *
@@ -363,15 +361,15 @@ namespace cedar {
     // currently disabled; implement these if you need
     da (const da&);
     da& operator= (const da&);
-    node*   _array;
-    ninfo*  _ninfo;
-    block*  _block;
-    int     _bheadF;  // first block of Full;   0
-    int     _bheadC;  // first block of Closed; 0 if no Closed
-    int     _bheadO;  // first block of Open;   0 if no Open
-    int     _capacity;
-    int     _size;
-    int     _no_delete;
+    node*   _array{nullptr};
+    ninfo*  _ninfo{nullptr};
+    block*  _block{nullptr};
+    int     _bheadF{0};  // first block of Full;   0
+    int     _bheadC{0};  // first block of Closed; 0 if no Closed
+    int     _bheadO{0};  // first block of Open;   0 if no Open
+    int     _capacity{0};
+    int     _size{0};
+    bool     _no_delete{false};
     short   _reject[257];
     //
     static void _err (const char* fn, const int ln, const char* msg)
