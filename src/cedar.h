@@ -154,12 +154,25 @@ namespace cedar {
       return b.x;
     }
     struct empty_callback { void operator () (const int, const int) {} }; // dummy empty function
+
     value_type& update (const char* key)
-    { return update (key, std::strlen (key)); }
+    { 
+	  return update (key, std::strlen (key)); 
+	}
+
     value_type& update (const char* key, size_t len, value_type val = value_type (0))
-    { size_t from (0), pos (0); return update (key, from, pos, len, val); }
+    { 
+	  size_t from (0);
+	  size_t pos (0); 
+	  return update (key, from, pos, len, val); 
+    }
+
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val = value_type (0))
-    { empty_callback cf; return update (key, from, pos, len, val, cf); }
+    { 
+	  empty_callback cf; 
+	  return update (key, from, pos, len, val, cf); 
+    }
+
     template <typename T>
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val, T& cf) {
       if (! len && ! from)
@@ -185,7 +198,9 @@ namespace cedar {
       return _array[to].value += val;
     }
     // easy-going erase () without compression
-    int erase (const char* key) { return erase (key, std::strlen (key)); }
+    int erase (const char* key) { 
+	  return erase (key, std::strlen (key)); 
+    }
     int erase (const char* key, size_t len, size_t from = 0) {
       size_t pos = 0;
       const int i = _find (key, from, pos, len);
@@ -219,7 +234,9 @@ namespace cedar {
     template <typename T>
     void dump (T* result, const size_t result_len) {
       union { int i; value_type x; } b;
-      size_t num (0), from (0), p (0);
+      size_t num (0);
+	  size_t from (0);
+	  size_t p (0);
       for (b.i = begin (from, p); b.i != CEDAR_NO_PATH; b.i = next (from, p))
         if (num < result_len)
           _set_result (&result[num++], b.x, p, from);
@@ -359,8 +376,11 @@ namespace cedar {
     size_t tracking_node[NUM_TRACKING_NODES + 1];
   private:
     // currently disabled; implement these if you need
-    da (const da&);
-    da& operator= (const da&);
+    da (const da&) = delete;
+    da& operator= (const da&) = delete;
+    da (da&&) = delete;
+    da& operator= (da&&) = delete;
+
     node*   _array{nullptr};
     ninfo*  _ninfo{nullptr};
     block*  _block{nullptr};
@@ -381,7 +401,11 @@ namespace cedar {
         std::free (p), _err (__FILE__, __LINE__, "memory reallocation failed\n");
       p = static_cast <T*> (tmp);
       static const T T0 = T ();
-      for (T* q (p + size_p), * const r (p + size_n); q != r; ++q) *q = T0;
+      T *q = p + size_p;
+      T *const r = p + size_n;
+      for (; q != r; ++q) {
+        *q = T0;
+      }
     }
     void _initialize () { // initilize the first special block
       _realloc_array (_array, 256, 256);
