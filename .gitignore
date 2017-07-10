@@ -1,5 +1,10 @@
 *.o
+aclocal.m4
 Makefile
+Makefile.in
+src/Makefile.in
+src/Makefile
+configure
 .deps/
 config.h
 config.log
