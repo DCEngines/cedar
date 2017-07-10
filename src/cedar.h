@@ -17,7 +17,10 @@
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
 /**
- * instead of base[s] + c = t, this impl does base[s] ^ c 
+ * instead of "base[s] + c = t", this implementation computes "base[s] ^ c = t"
+ * For each label c in range [0-255], this guarantees that all child nodes 
+ * are located within certain block N
+ * i.e. child nodes are located at 256.N <= (base[p] XOR c) <= 256.(N+1)
  */
 
 namespace cedar {
@@ -35,9 +38,14 @@ namespace cedar {
             const size_t  NUM_TRACKING_NODES = 0>
   class da {
   public:
-    enum error_code { CEDAR_NO_VALUE = NO_VALUE, CEDAR_NO_PATH = NO_PATH, CEDAR_VALUE_LIMIT = 2147483647 };
+    enum error_code { 
+	  CEDAR_NO_VALUE = NO_VALUE, 
+	  CEDAR_NO_PATH = NO_PATH, 
+	  CEDAR_VALUE_LIMIT = 2147483647 
+    };
     typedef value_type result_type;
     union int_value_t { int i; value_type x; };
+
     struct result_pair_type {
       value_type  value;
       size_t      length;  // prefix length
@@ -47,6 +55,9 @@ namespace cedar {
       size_t      length;  // suffix length
       size_t      id;      // node id of value
     };
+
+	// check field stores addr of parent node
+	// check[base[p] ^ label] = p
     struct node {
       union { int base_; value_type value; }; // negative means prev empty index
       int  check;                             // negative means next empty index
@@ -58,10 +69,18 @@ namespace cedar {
       int base () const { return base_; }
 #endif
     };
+	// Optimization added for relocation
+	// for each node, 
+	// store label needed to reach its first child
+	// store label needed to reach from my parent, the sibling next to node
     struct ninfo {  // x1.5 update speed; +.25 % memory (8n -> 10n)
       uchar  sibling{0};   // right sibling (= 0 if not exist)
       uchar  child{0};     // first child
     };
+	// Each block of 256 addr can be full, closed or open
+	// full = no empty addr
+	// closed = those with only one empty addr or failed to be relocated a few times
+	// open = have more than one empty addr
     struct block { // a block w/ 256 elements
       int   prev{0};   // prev block; 3 bytes
       int   next{0};   // next block; 3 bytes
@@ -93,7 +112,11 @@ namespace cedar {
 #ifdef USE_REDUCED_TRIE
         if (_array[to].check >= 0 && _array[to].value >= 0) ++i;
 #else
-        if (_array[to].check >= 0 && _array[_array[to].check].base () == to) ++i;
+        if (_array[to].check >= 0 && 
+		  // i.e. array[parent].base == to
+		  _array[_array[to].check].base () == to) {
+		    ++i;
+		}
 #endif
       return i;
     }
@@ -566,7 +589,7 @@ namespace cedar {
     // pop empty node from block; never transfer the special block (bi = 0)
     int _pop_enode (const int base, const uchar label, const int from) {
       const int e  = base < 0 ? _find_place () : base ^ label;
-      const int bi = e >> 8;
+      const int bi = e >> 8; // this is modulo 256
       node&  n = _array[e];
       block& b = _block[bi];
       if (--b.num == 0) {
@@ -633,8 +656,10 @@ namespace cedar {
     }
     // check whether to replace branching w/ the newly added node
     bool _consult (const int base_n, const int base_p, uchar c_n, uchar c_p) const {
-      do c_n = _ninfo[base_n ^ c_n].sibling, c_p = _ninfo[base_p ^ c_p].sibling;
-      while (c_n && c_p);
+      do {
+	    c_n = _ninfo[base_n ^ c_n].sibling; 
+		c_p = _ninfo[base_p ^ c_p].sibling;
+	  } while (c_n && c_p);
       return c_p;
     }
     // enumerate (equal to or more than one) child nodes
@@ -671,15 +696,22 @@ namespace cedar {
           if (b.num >= nc && nc < b.reject) // explore configuration
             for (int e = b.ehead;;) {
               const int base = e ^ *first;
-              for (const uchar* p = first; _array[base ^ *++p].check < 0; )
+              for (const uchar* p = first; _array[base ^ *++p].check < 0; ) {
                 if (p == last) return b.ehead = e; // no conflict
+			  }
               if ((e = -_array[e].check) == b.ehead) break;
             }
           b.reject = nc;
-          if (b.reject < _reject[b.num]) _reject[b.num] = b.reject;
+          if (b.reject < _reject[b.num]) {
+		    _reject[b.num] = b.reject;
+		  }
           const int bi_ = b.next;
-          if (++b.trial == MAX_TRIAL) _transfer_block (bi, _bheadO, _bheadC);
-          if (bi == bz) break;
+          if (++b.trial == MAX_TRIAL) {
+		    _transfer_block (bi, _bheadO, _bheadC);
+		  }
+          if (bi == bz) {
+		    break;
+		  }
           bi = bi_;
         };
       }
@@ -726,11 +758,13 @@ namespace cedar {
 #endif
           {
             uchar c = _ninfo[to].child = _ninfo[to_].child;
-            do _array[n.base () ^ c].check = to; // adjust grand son's check
-            while ((c = _ninfo[n.base () ^ c].sibling));
+            do {
+			  _array[n.base () ^ c].check = to; // adjust grand son's check
+			} while ((c = _ninfo[n.base () ^ c].sibling));
           }
-        if (! flag && to_ == static_cast <int> (from_n)) // parent node moved
+        if (! flag && to_ == static_cast <int> (from_n)) { // parent node moved
           from_n = static_cast <size_t> (to); // bug fix
+		}
         if (! flag && to_ == to_pn) { // the address is immediately used
           _push_sibling (from_n, to_pn ^ label_n, label_n);
           _ninfo[to_].child = 0; // remember to reset child
