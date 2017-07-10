@@ -21,6 +21,8 @@
  * For each label c in range [0-255], this guarantees that all child nodes 
  * are located within certain block N
  * i.e. child nodes are located at 256.N <= (base[p] XOR c) <= 256.(N+1)
+ * quote from "A Self-adaptive Classifier for Efficient Text-stream Processing"
+ *  by Yoshinaga and Kitsuregawa
  */
 
 namespace cedar {
@@ -305,32 +307,32 @@ namespace cedar {
       return 0;
     }
     int open (const char* fn, const char* mode = "rb",
-              const size_t offset = 0, size_t size_ = 0) {
+              const size_t offset = 0, size_t in_size = 0) {
       FILE* fp = std::fopen (fn, mode);
       if (! fp) return -1;
       // get size
-      if (! size_) {
+      if (! in_size) {
         if (std::fseek (fp, 0, SEEK_END) != 0) return -1;
-        size_ = static_cast <size_t> (std::ftell (fp));
+        in_size = static_cast <size_t> (std::ftell (fp));
         if (std::fseek (fp, 0, SEEK_SET) != 0) return -1;
       }
-      if (size_ <= offset) return -1;
+      if (in_size <= offset) return -1;
       // set array
       clear (false);
-      size_ = (size_ - offset) / sizeof (node);
+      in_size = (in_size - offset) / sizeof (node);
       if (std::fseek (fp, static_cast <long> (offset), SEEK_SET) != 0) return -1;
-      _array = static_cast <node*>  (std::malloc (sizeof (node)  * size_));
+      _array = static_cast <node*>  (std::malloc (sizeof (node)  * in_size));
 #ifdef USE_FAST_LOAD
-      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * size_));
-      _block = static_cast <block*> (std::malloc (sizeof (block) * size_));
+      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * in_size));
+      _block = static_cast <block*> (std::malloc (sizeof (block) * in_size));
       if (! _array || ! _ninfo || ! _block)
 #else
         if (! _array)
 #endif
           _err (__FILE__, __LINE__, "memory allocation failed\n");
-      if (size_ != std::fread (_array, sizeof (node), size_, fp)) return -1;
+      if (in_size != std::fread (_array, sizeof (node), in_size, fp)) return -1;
       std::fclose (fp);
-      _size = static_cast <int> (size_);
+      _size = static_cast <int> (in_size);
 #ifdef USE_FAST_LOAD
       const char* const info
         = std::strcat (std::strcpy (new char[std::strlen (fn) + 5], fn), ".sbl");
@@ -340,8 +342,8 @@ namespace cedar {
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
-      if (size_ != std::fread (_ninfo, sizeof (ninfo), size_, fp) ||
-          size_ != std::fread (_block, sizeof (block), size_ >> 8, fp) << 8)
+      if (in_size != std::fread (_ninfo, sizeof (ninfo), in_size, fp) ||
+          in_size != std::fread (_block, sizeof (block), in_size >> 8, fp) << 8)
         return -1;
       std::fclose (fp);
       _capacity = _size;
@@ -355,10 +357,10 @@ namespace cedar {
       _capacity = _size;
     }
 #endif
-    void set_array (void* p, size_t size_ = 0) { // ad-hoc
+    void set_array (void* p, size_t in_size = 0) { // ad-hoc
       clear (false);
       _array = static_cast <node*> (p);
-      _size  = static_cast <int> (size_);
+      _size  = static_cast <int> (in_size);
       _no_delete = true;
     }
     const void* array () const { return _array; }
@@ -539,6 +541,8 @@ namespace cedar {
     { x->value = r; x->length = l; }
     void _set_result (result_triple_type* x, value_type r, size_t l, size_t from) const
     { x->value = r; x->length = l; x->id = from; }
+
+
     void _pop_block (const int bi, int& head_in, const bool last) {
       if (last) { // last one poped; Closed or Open
         head_in = 0;
@@ -693,7 +697,7 @@ namespace cedar {
         const short nc = static_cast <short> (last - first + 1);
         while (1) { // set candidate block
           block& b = _block[bi];
-          if (b.num >= nc && nc < b.reject) // explore configuration
+          if (b.num >= nc && nc < b.reject) { // explore configuration
             for (int e = b.ehead;;) {
               const int base = e ^ *first;
               for (const uchar* p = first; _array[base ^ *++p].check < 0; ) {
@@ -701,6 +705,7 @@ namespace cedar {
 			  }
               if ((e = -_array[e].check) == b.ehead) break;
             }
+		  }
           b.reject = nc;
           if (b.reject < _reject[b.num]) {
 		    _reject[b.num] = b.reject;
