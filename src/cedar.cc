@@ -27,6 +27,9 @@ int main(int argc, char **argv) {
   //
   trie_t::result_pair_type   result_pair[NUM_RESULT];
   trie_t::result_triple_type result_triple[NUM_RESULT];
+
+  trie.dump(result_pair, NUM_RESULT);
+
   char line[8192];
   while (std::fgets (line, 8192, stdin)) {
     line[std::strlen (line) - 1] = '\0';
