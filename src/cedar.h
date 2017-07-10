@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
+#include <glog/logging.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -199,6 +200,7 @@ namespace cedar {
 #else
       const int to = _follow (from, 0, cf);
 #endif
+      VLOG(1) << "update slot=" << to << ",val=" << val;
       return _array[to].value += val;
     }
     // easy-going erase () without compression
@@ -435,8 +437,10 @@ namespace cedar {
       if (base < 0 || _array[to = base ^ label].check < 0) {
         to = _pop_enode (base, label, static_cast <int> (from));
         _push_sibling (from, to ^ label, label, base >= 0);
-      } else if (_array[to].check != static_cast <int> (from))
+      } else if (_array[to].check != static_cast <int> (from)) {
         to = _resolve (from, base, label, cf);
+      }
+	  VLOG(1) << "follow from=" << from << ",label=" << label << ",to=" << to << ",base=" << base;
       return to;
     }
     // find key from double array
@@ -533,6 +537,7 @@ namespace cedar {
     }
     // transfer block from one start w/ head_in to one start w/ head_out
     void _transfer_block (const int bi, int& head_in, int& head_out) {
+	  VLOG(1) << "transfer bi=" << bi << " from=" << head_in << ",to=" << head_out;
       _pop_block  (bi, head_in, bi == _block[bi].next);
       _push_block (bi, head_out, ! head_out && _block[bi].num);
     }
@@ -559,6 +564,7 @@ namespace cedar {
       if (label) n.base_ = -1; else n.value = value_type (0); n.check = from;
       if (base < 0) _array[from].base_ = e ^ label;
 #endif
+	  VLOG(1) << " pop empty " << e;
       return e;
     }
     // push empty node into empty ring
@@ -574,19 +580,28 @@ namespace cedar {
         const int next = -_array[prev].check;
         _array[e] = node (-prev, -next);
         _array[prev].check = _array[next].base_ = -e;
-        if (b.num == 2 || b.trial == MAX_TRIAL) // Closed to Open
-          if (bi) _transfer_block (bi, _bheadC, _bheadO);
+        if (b.num == 2 || b.trial == MAX_TRIAL) { // Closed to Open
+          if (bi) { 
+		    _transfer_block (bi, _bheadC, _bheadO);
+		  }  
+		}
         b.trial = 0;
       }
       if (b.reject < _reject[b.num]) b.reject = _reject[b.num];
       _ninfo[e] = ninfo (); // reset ninfo; no child, no sibling
+	  VLOG(1) << " push empty " << e;
     }
     // push label to from's child
     void _push_sibling (const size_t from, const int base, const uchar label, const bool flag = true) {
       uchar* c = &_ninfo[from].child;
-      if (flag && (ORDERED ? label > *c : ! *c))
-        do c = &_ninfo[base ^ *c].sibling; while (ORDERED && *c && *c < label);
-      _ninfo[base ^ label].sibling = *c, *c = label;
+      if (flag && (ORDERED ? label > *c : ! *c)) {
+        do { 
+          c = &_ninfo[base ^ *c].sibling; 
+        } while (ORDERED && *c && *c < label);
+      }
+      _ninfo[base ^ label].sibling = *c; 
+	  *c = label;
+	  VLOG(1) << "push from=" << from << ",base=" << base << ",label=" << label;
     }
     // pop label from from's child
     void _pop_sibling (const size_t from, const int base, const uchar label) {

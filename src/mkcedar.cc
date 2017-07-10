@@ -12,7 +12,10 @@
 #include <cedar.h>
 #endif
 
+#include <gflags/gflags.h>
+
 int main (int argc, char **argv) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (argc < 3)
     { std::fprintf (stderr, "Usage: %s keys trie\n", argv[0]); std::exit (1); }
   //

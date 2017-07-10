@@ -11,10 +11,12 @@
 #else
 #include <cedar.h>
 #endif
+#include <gflags/gflags.h>
 
 static const size_t NUM_RESULT = 1024;
 
 int main(int argc, char **argv) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (argc < 2)
     { std::fprintf (stderr, "Usage: %s trie\n", argv[0]); std::exit (1); }
 

@@ -5,3 +5,5 @@ include_HEADERS = cedar.h cedarpp.h
 
 cedar_SOURCES = cedar.h cedarpp.h cedar.cc
 mkcedar_SOURCES = cedar.h cedarpp.h mkcedar.cc
+
+LDADD = -lgflags -lglog
