@@ -9,6 +9,17 @@ set(CMAKE_COLOR_MAKEFILE)
 
 set(CXX_STANDARD c++14)
 
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" "${CMAKE_MODULE_PATH}")
+
+# Include the thread, address, memory sanitizer cmake files
+include(FindUBSan)
+include(FindTSan)
+include(FindASan)
+include(FindMSan)
+
+include(clang-format)
+include(cppcheck)
+
 # Release/Debug/RelWithDebInfo/MinSizeRel
 # For sanitizer, ASan, TSan, MSan
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
