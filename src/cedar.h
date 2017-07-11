@@ -63,7 +63,7 @@ namespace cedar {
     };
 
 	// check field stores addr of parent node
-	// check[base[p] ^ label] = p
+	// this invariant holds => check[base[p] ^ label] = p
     struct node {
       union { int base_; value_type value; }; // negative means prev empty index
       int  check;                             // negative means next empty index
@@ -76,17 +76,23 @@ namespace cedar {
 #endif
     };
 	// Optimization added for relocation
-	// for each node, 
-	// store label needed to reach its first child
-	// store label needed to reach from my parent, the sibling next to node
+	// 
+	// Given   a -> b -> c -> d
+	//              |
+	//               --> p -> q
+	//              |
+	//               --> x -> y
+	// 
+	// ninfo[slot_c].child = 'd'
+	// ninfo[slot_c].sibling = 'x'
     struct ninfo {  // x1.5 update speed; +.25 % memory (8n -> 10n)
       uchar  sibling{0};   // right sibling (= 0 if not exist)
       uchar  child{0};     // first child
     };
 	// Each block of 256 addr can be full, closed or open
-	// full = no empty addr (num = 0)
-	// closed = those with only one empty addr or failed to be relocated a few times (num = 1)
-	// open = have more than one empty addr (num > 1)
+	// full => no empty addr (block.num = 0)
+	// closed = those with only one empty addr or failed to be relocated a few times (block.num = 1)
+	// open = have more than one empty addr (block.num > 1)
     struct block { // a block w/ 256 elements
       int   prev{0};   // prev block; 3 bytes
       int   next{0};   // next block; 3 bytes
@@ -249,6 +255,10 @@ namespace cedar {
       erase (from);
       return 0;
     }
+	/**
+	 * frees the nodes for a given string from last to first 
+	 * if string = "abc", then first 'c', then 'b' and so on
+	 */
     void erase (size_t from) {
       // _test ();
 #ifdef USE_REDUCED_TRIE
@@ -266,8 +276,11 @@ namespace cedar {
 		}
         _push_enode (e);
         e = static_cast <int> (from);
+        // cur = cur->prev
         from = static_cast <size_t> (_array[from].check);
       } while (! flag);
+      // termination condition (!flag) indicates if the trie has a branch, 
+      // then do not free nodes which are common(shared) with another branch
     }
     int build (size_t num, const char** key, const size_t* len = 0, const value_type* val = 0) {
       for (size_t i = 0; i < num; ++i) {
@@ -472,12 +485,14 @@ namespace cedar {
       for (size_t i = 0 ; i <= NUM_TRACKING_NODES; ++i) tracking_node[i] = 0;
       for (short  i = 0; i <= 256; ++i) _reject[i] = i + 1;
     }
+
     // follow/create edge
     template <typename T>
     int _follow (size_t& from, const uchar& label, T& cf) {
       int to = 0;
       const int base = _array[from].base ();
       if (base < 0 || _array[to = base ^ label].check < 0) {
+        // if char does not exist, then create new edge
         to = _pop_enode (base, label, static_cast <int> (from));
         _push_sibling (from, to ^ label, label, base >= 0);
       } else if (_array[to].check != static_cast <int> (from)) {
@@ -486,6 +501,7 @@ namespace cedar {
 	  VLOG(1) << "follow from=" << from << ",label=" << label << ",to=" << to << ",base=" << base;
       return to;
     }
+
     // find key from double array
     int _find (const char* key, size_t& from, size_t& pos, const size_t len) const {
 	  VLOG(1) << "find key=" << key << ",from=" << from << ",pos=" << pos << ",len=" << len;
@@ -496,8 +512,10 @@ namespace cedar {
 #endif
         size_t to = static_cast <size_t> (_array[from].base ()); 
         to ^= key_[pos];
+        if (_array[to].check != static_cast <int> (from)) {
+          return CEDAR_NO_PATH;
+        }
 	    VLOG(1) << "find char=" << key_[pos] << ",from=" << from << ",to=" << to;
-        if (_array[to].check != static_cast <int> (from)) return CEDAR_NO_PATH;
         from = to;
       }
 #ifdef USE_REDUCED_TRIE
@@ -507,6 +525,7 @@ namespace cedar {
       const node& n = _array[_array[from].base () ^ 0];
 	  int retval = 0;
       if (n.check != static_cast <int> (from)) { 
+        // implies cur->next->prev != cur
 	    retval = CEDAR_NO_VALUE;
 	  } else {
         retval = n.base_;
@@ -609,20 +628,32 @@ namespace cedar {
         // no free slots ? transfer a block from Closed to Full
         if (bi) _transfer_block (bi, _bheadC, _bheadF); 
       } else { // release empty node from empty ring
+        // n->prev->next = n->next
         _array[-n.base_].check = n.check;
+        // n->next->prev = n->prev
         _array[-n.check].base_ = n.base_;
+        // if n = head of list, move head = n->next
         if (e == b.ehead) b.ehead = -n.check; // set ehead
-        if (bi && b.num == 1 && b.trial != MAX_TRIAL) 
+        if (bi && b.num == 1 && b.trial != MAX_TRIAL) {
           // transfer a block from Open to Closed
           _transfer_block (bi, _bheadO, _bheadC);
+        }
       }
       // initialize the released node
 #ifdef USE_REDUCED_TRIE
       n.value = CEDAR_VALUE_LIMIT; n.check = from;
       if (base < 0) _array[from].base_ = - (e ^ label) - 1;
 #else
-      if (label) n.base_ = -1; else n.value = value_type (0); n.check = from;
-      if (base < 0) _array[from].base_ = e ^ label;
+      if (label) {
+	    n.base_ = -1; 
+      } else { 
+        n.value = value_type (0); 
+      } 
+      n.check = from; // set back pointer : to -> from
+      if (base < 0) {
+        // set forward pointer: from -> to ^ label
+        _array[from].base_ = e ^ label;
+      }
 #endif
 	  VLOG(1) << "pop empty " << e;
       return e;
@@ -655,15 +686,27 @@ namespace cedar {
       _ninfo[e] = ninfo (); // reset ninfo; no child, no sibling
 	  VLOG(1) << " push empty " << e;
     }
-    // push label to from's child
+
+    // this func is called at point where new string diverges from existing string
+    // e.g. given strings abcdef, abcxyz, abcpqr
+    // and notation is that branch 'd' has slot = base ^ 'd' = slot_d
+    // then you shall see
+    // _ninfo[slot_d].child = 'e', _ninfo[slot_d].sibling = 'p'
+    // _ninfo[slot_p].child = 'q', _ninfo[slot_p].sibling = 'x'
+    // _ninfo[slot_x].child = 'y', _ninfo[slot_x].sibling = '0'
+
     void _push_sibling (const size_t from, const int base, const uchar label, const bool flag = true) {
       uchar* c = &_ninfo[from].child;
       if (flag && (ORDERED ? label > *c : ! *c)) {
         do { 
+          // (base ^ *c) tells you original slot
           c = &_ninfo[base ^ *c].sibling; 
+          // traverse until oldest sibling which is younger than new label
         } while (ORDERED && *c && *c < label);
       }
+      // sibling of new branch = char which was less than this branch
       _ninfo[base ^ label].sibling = *c; 
+      // sibling of old branch = the start character of new branch 
 	  *c = label;
 	  VLOG(1) << "push from=" << from << ",base=" << base << ",label=" << label;
     }
