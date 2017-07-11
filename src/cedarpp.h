@@ -10,9 +10,11 @@
 #include <climits>
 #include <cassert>
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+// TODO set this config via cmake
+#undef USE_FAST_LOAD
+#undef USE_PREFIX_TRIE
+#undef USE_REDUCED_TRIE
+#undef USE_EXACT_FIT
 
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
