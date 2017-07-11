@@ -16,6 +16,10 @@
 
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
+// each slot in "_block" contains info on 256 contiguous elements in "_array"
+// hence the right shift
+#define ArrayToBlock(s) (s >> 8)
+
 /**
  * instead of "base[s] + c = t", this implementation computes "base[s] ^ c = t"
  * For each label c in range [0-255], this guarantees that all child nodes 
@@ -80,9 +84,9 @@ namespace cedar {
       uchar  child{0};     // first child
     };
 	// Each block of 256 addr can be full, closed or open
-	// full = no empty addr
-	// closed = those with only one empty addr or failed to be relocated a few times
-	// open = have more than one empty addr
+	// full = no empty addr (num = 0)
+	// closed = those with only one empty addr or failed to be relocated a few times (num = 1)
+	// open = have more than one empty addr (num > 1)
     struct block { // a block w/ 256 elements
       int   prev{0};   // prev block; 3 bytes
       int   next{0};   // next block; 3 bytes
@@ -301,7 +305,7 @@ namespace cedar {
       std::fwrite (&_bheadC, sizeof (int), 1, fp);
       std::fwrite (&_bheadO, sizeof (int), 1, fp);
       std::fwrite (_ninfo, sizeof (ninfo), static_cast <size_t> (_size), fp);
-      std::fwrite (_block, sizeof (block), static_cast <size_t> (_size >> 8), fp);
+      std::fwrite (_block, sizeof (block), static_cast <size_t> (ArrayToBlock(_size)), fp);
       std::fclose (fp);
 #endif
       return 0;
@@ -343,7 +347,7 @@ namespace cedar {
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
       if (in_size != std::fread (_ninfo, sizeof (ninfo), in_size, fp) ||
-          in_size != std::fread (_block, sizeof (block), in_size >> 8, fp) << 8)
+          in_size != std::fread (_block, sizeof (block), ArrayToBlock(in_size), fp) << 8)
         return -1;
       std::fclose (fp);
       _capacity = _size;
@@ -523,13 +527,17 @@ namespace cedar {
       }
     }
     void _restore_block () {
-      _realloc_array (_block, _size >> 8);
+      _realloc_array (_block, ArrayToBlock(_size));
       _bheadF = _bheadC = _bheadO = 0;
       for (int bi (0), e (0); e < _size; ++bi) { // register blocks to full
         block& b = _block[bi];
-        b.num = 0;
-        for (; e < (bi << 8) + 256; ++e)
-          if (_array[e].check < 0 && ++b.num == 1) b.ehead = e;
+        b.num = 0; // indicates Full block
+        for (; e < (bi << 8) + 256; ++e) {
+          if (_array[e].check < 0 && ++b.num == 1) {
+		    b.ehead = e;
+		  }
+		}
+		// choose appropriate linked list head based on b.num
         int& head_out = b.num == 1 ? _bheadC : (b.num == 0 ? _bheadF : _bheadO);
         _push_block (bi, head_out, ! head_out && b.num);
       }
@@ -573,16 +581,17 @@ namespace cedar {
 #endif
         _realloc_array (_array, _capacity, _capacity);
         _realloc_array (_ninfo, _capacity, _size);
-        _realloc_array (_block, _capacity >> 8, _size >> 8);
+        _realloc_array (_block, ArrayToBlock(_capacity), ArrayToBlock(_size));
       }
-      _block[_size >> 8].ehead = _size;
+      _block[ArrayToBlock(_size)].ehead = _size;
       _array[_size] = node (- (_size + 255),  - (_size + 1));
-      for (int i = _size + 1; i < _size + 255; ++i)
+      for (int i = _size + 1; i < _size + 255; ++i) {
         _array[i] = node (-(i - 1), -(i + 1));
+	  }
       _array[_size + 255] = node (- (_size + 254),  -_size);
-      _push_block (_size >> 8, _bheadO, ! _bheadO); // append to block Open
+      _push_block (ArrayToBlock(_size), _bheadO, ! _bheadO); // append to block Open
       _size += 256;
-      return (_size >> 8) - 1;
+      return ArrayToBlock(_size) - 1;
     }
     // transfer block from one start w/ head_in to one start w/ head_out
     void _transfer_block (const int bi, int& head_in, int& head_out) {
@@ -593,16 +602,18 @@ namespace cedar {
     // pop empty node from block; never transfer the special block (bi = 0)
     int _pop_enode (const int base, const uchar label, const int from) {
       const int e  = base < 0 ? _find_place () : base ^ label;
-      const int bi = e >> 8; // this is modulo 256
+      const int bi = ArrayToBlock(e); // this is modulo 256
       node&  n = _array[e];
       block& b = _block[bi];
       if (--b.num == 0) {
-        if (bi) _transfer_block (bi, _bheadC, _bheadF); // Closed to Full
+        // no free slots ? transfer a block from Closed to Full
+        if (bi) _transfer_block (bi, _bheadC, _bheadF); 
       } else { // release empty node from empty ring
         _array[-n.base_].check = n.check;
         _array[-n.check].base_ = n.base_;
         if (e == b.ehead) b.ehead = -n.check; // set ehead
-        if (bi && b.num == 1 && b.trial != MAX_TRIAL) // Open to Closed
+        if (bi && b.num == 1 && b.trial != MAX_TRIAL) 
+          // transfer a block from Open to Closed
           _transfer_block (bi, _bheadO, _bheadC);
       }
       // initialize the released node
@@ -618,12 +629,15 @@ namespace cedar {
     }
     // push empty node into empty ring
     void _push_enode (const int e) {
-      const int bi = e >> 8;
+      const int bi = ArrayToBlock(e);
       block& b = _block[bi];
       if (++b.num == 1) { // Full to Closed
         b.ehead = e;
         _array[e] = node (-e, -e);
-        if (bi) _transfer_block (bi, _bheadF, _bheadC); // Full to Closed
+        if (bi) {
+          // transfer block from Full list to Closed
+		  _transfer_block (bi, _bheadF, _bheadC); 
+		}
       } else {
         const int prev = b.ehead;
         const int next = -_array[prev].check;
@@ -631,6 +645,7 @@ namespace cedar {
         _array[prev].check = _array[next].base_ = -e;
         if (b.num == 2 || b.trial == MAX_TRIAL) { // Closed to Open
           if (bi) { 
+            // transfer block from Closed to Open list
 		    _transfer_block (bi, _bheadC, _bheadO);
 		  }  
 		}
