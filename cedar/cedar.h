@@ -607,6 +607,7 @@ namespace cedar {
         _realloc_array (_array, _capacity, _capacity);
         _realloc_array (_ninfo, _capacity, _size);
         _realloc_array (_block, ArrayToBlock(_capacity), ArrayToBlock(_size));
+        LOG(INFO) << "realloc new capacity=" << _capacity;
       }
       _block[ArrayToBlock(_size)].ehead = _size;
       _array[_size] = node (- (_size + 255),  - (_size + 1));
@@ -616,6 +617,7 @@ namespace cedar {
       _array[_size + 255] = node (- (_size + 254),  -_size);
       _push_block (ArrayToBlock(_size), _bheadO, ! _bheadO); // append to block Open
       _size += 256;
+      LOG(INFO) << "realloc new size=" << _size;
       return ArrayToBlock(_size) - 1;
     }
     // transfer block from one start w/ head_in to one start w/ head_out
@@ -661,7 +663,7 @@ namespace cedar {
         _array[from].base_ = e ^ label;
       }
 #endif
-	  VLOG(1) << "pop empty " << e;
+	  VLOG(1) << "pop empty node=" << e << ",block=" << bi << ",total=" << b.num;
       return e;
     }
     // push empty node into empty ring
