@@ -42,6 +42,8 @@ endif(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${CXX_STANDARD} -Wnon-virtual-dtor -Woverloaded-virtual ")
 
+link_directories(/usr/local/lib)
+
 # these below apply to C and C++ files
 add_compile_options(
   -Wall
