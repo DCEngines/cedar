@@ -688,9 +688,16 @@ namespace cedar {
 		}
         b.trial = 0;
       }
-      if (b.reject < _reject[b.num]) b.reject = _reject[b.num];
+      VLOG(1) << "push empty node=" << e << ",block=" << bi << " total=" << b.num;
+      if (e == 0) {
+        // adjust for node 0 which is never popped but always pushed ?
+        // because of which, block.num rises above 256
+        -- b.num; 
+      }
+      if (b.reject < _reject[b.num]) {
+        b.reject = _reject[b.num];
+      }
       _ninfo[e] = ninfo (); // reset ninfo; no child, no sibling
-	  VLOG(1) << " push empty " << e;
     }
 
     // this func is called at point where new string diverges from existing string
