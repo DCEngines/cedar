@@ -64,5 +64,6 @@ add_compile_options(
   -ffunction-sections
 )
 
-add_subdirectory(src)
+add_subdirectory(examples)
+add_subdirectory(benchmark)
 
