@@ -86,7 +86,9 @@ namespace cedar {
 	//               --> x -> y
 	// 
 	// ninfo[slot_c].child = 'd'
-	// ninfo[slot_c].sibling = 'x'
+	// ninfo[slot_c].sibling = 'p'
+	// ninfo[slot_p].sibling = 'x'
+	// ninfo[slot_x].sibling = '0'
     struct ninfo {  // x1.5 update speed; +.25 % memory (8n -> 10n)
       uchar  sibling{0};   // right sibling (= 0 if not exist)
       uchar  child{0};     // first child
@@ -184,6 +186,7 @@ namespace cedar {
       }
       return num;
     }
+	// walk back the trie from "to" slot to fill the passed in "key"
     void suffix (char* key, size_t len, size_t to) const {
       key[len] = '\0';
       while (len--) {
