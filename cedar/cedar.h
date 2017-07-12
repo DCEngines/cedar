@@ -237,6 +237,7 @@ namespace cedar {
         if (val_ >= 0 && val_ != CEDAR_VALUE_LIMIT) // always new; correct this!
           { const int to = _follow (from, 0, cf); _array[to].value = val_; }
 #endif
+        assert(key_[pos] != 0); // char 0 in string does not work with xor
         from = static_cast <size_t> (_follow (from, key_[pos], cf));
       }
 #ifdef USE_REDUCED_TRIE
