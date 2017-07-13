@@ -315,10 +315,9 @@ namespace cedar {
       std::fwrite (_array, sizeof (node), static_cast <size_t> (_size), fp);
       std::fclose (fp);
 #ifdef USE_FAST_LOAD
-      const char* const info
-        = std::strcat (std::strcpy (new char[std::strlen (fn) + 5], fn), ".sbl");
-      fp = std::fopen (info, mode);
-      delete [] info; // resolve memory leak
+      std::string info(fn);
+      info.append(".sbl");
+      fp = std::fopen (info.c_str(), mode);
       if (! fp) return -1;
       std::fwrite (&_bheadF, sizeof (int), 1, fp);
       std::fwrite (&_bheadC, sizeof (int), 1, fp);
