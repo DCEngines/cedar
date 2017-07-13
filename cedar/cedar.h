@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cassert>
 #include <glog/logging.h>
+#include <sys/mman.h>
 
 // TODO set this config via cmake
 #undef USE_FAST_LOAD
@@ -348,7 +349,8 @@ namespace cedar {
         }
       }
       if (in_size <= offset) {
-        LOG(ERROR) << "file=" << fn << " size=" << in_size << " less than requested offset=" << offset;
+        LOG(ERROR) << "file=" << fn << " size=" << in_size 
+          << " less than requested offset=" << offset;
 	    return -1;
       }
       // set array
@@ -389,21 +391,55 @@ namespace cedar {
       std::fclose (fp);
       _capacity = _size;
 #endif
-      if (in_size != std::fread (_array, sizeof (node), in_size, fp)) return -1;
-      std::fclose (fp);
-      _size = static_cast <int> (in_size);
-#ifdef USE_FAST_LOAD
-      const char* const info
-        = std::strcat (std::strcpy (new char[std::strlen (fn) + 5], fn), ".sbl");
-      fp = std::fopen (info, mode);
-      delete [] info; // resolve memory leak
+      return 0;
+    }
+    int open_with_mmap (const char* fn, const char* mode = "rb",
+              const size_t offset = 0, size_t in_size = 0) {
+      FILE* fp = std::fopen (fn, mode);
       if (! fp) return -1;
+      // get size
+      if (! in_size) {
+        in_size = lseek(fileno(fp), 0, SEEK_END);
+        if (in_size == (off_t)-1) {
+          LOG(ERROR) << "lseek on " << fn << " failed errno=" << errno;
+          return -1;
+        }
+      }
+      if (in_size <= offset) {
+        LOG(ERROR) << "file=" << fn << " size=" << in_size 
+          << " less than requested offset=" << offset;
+	    return -1;
+      }
+      // set array
+      clear (false);
+      const size_t num_entries = (in_size - offset) / sizeof (node);
+
+      void* map_addr = mmap(NULL, sizeof(node) * in_size, PROT_READ, MAP_SHARED, fileno(fp), offset);
+      if (map_addr == MAP_FAILED) {
+        LOG(FATAL) << "mmap failed"; 
+      }
+	  _array = static_cast<node*>(map_addr);
+      std::fclose (fp);
+      _size = static_cast <int> (num_entries);
+#ifdef USE_FAST_LOAD
+      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * num_entries));
+      _block = static_cast <block*> (std::malloc (sizeof (block) * num_entries));
+      if (! _ninfo || ! _block) {
+        LOG(FATAL) << "memory allocation failed";
+      }
+      std::string info(fn);
+      info.append(".sbl");
+      fp = std::fopen (info.c_str(), mode);
+      if (! fp) {
+        return -1;
+      }
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
-      if (in_size != std::fread (_ninfo, sizeof (ninfo), in_size, fp) ||
-          in_size != std::fread (_block, sizeof (block), ArrayToBlock(in_size), fp) << 8)
+      if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp) ||
+          ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
         return -1;
+      }
       std::fclose (fp);
       _capacity = _size;
 #endif
