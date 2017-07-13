@@ -177,7 +177,9 @@ namespace cedar {
     template <typename T>
     size_t commonPrefixPredict (const char* key, T* result, size_t result_len, size_t len, size_t from = 0) {
       size_t num (0), pos (0), p (0);
-      if (_find (key, from, pos, len) == CEDAR_NO_PATH) return 0;
+      if (_find (key, from, pos, len) == CEDAR_NO_PATH) {
+	    return 0;
+      }
 	  int_value_t b;
       size_t root = from;
       for (b.i = begin (from, p); b.i != CEDAR_NO_PATH; b.i = next (from, p, root)) {
@@ -258,7 +260,9 @@ namespace cedar {
     int erase (const char* key, size_t len, size_t from = 0) {
       size_t pos = 0;
       const int i = _find (key, from, pos, len);
-      if (i == CEDAR_NO_PATH || i == CEDAR_NO_VALUE) return -1;
+      if (i == CEDAR_NO_PATH || i == CEDAR_NO_VALUE) {
+	    return -1;
+      }
       erase (from);
       return 0;
     }
@@ -337,25 +341,53 @@ namespace cedar {
       if (! fp) return -1;
       // get size
       if (! in_size) {
-        if (std::fseek (fp, 0, SEEK_END) != 0) return -1;
-        in_size = static_cast <size_t> (std::ftell (fp));
-        if (std::fseek (fp, 0, SEEK_SET) != 0) return -1;
+        in_size = lseek(fileno(fp), 0, SEEK_END);
+        if (in_size == (off_t)-1) {
+          LOG(ERROR) << "lseek on " << fn << " failed errno=" << errno;
+          return -1;
+        }
       }
-      if (in_size <= offset) return -1;
+      if (in_size <= offset) {
+        LOG(ERROR) << "file=" << fn << " size=" << in_size << " less than requested offset=" << offset;
+	    return -1;
+      }
       // set array
       clear (false);
-      in_size = (in_size - offset) / sizeof (node);
-      if (std::fseek (fp, static_cast <long> (offset), SEEK_SET) != 0) return -1;
-      _array = static_cast <node*>  (std::malloc (sizeof (node)  * in_size));
+      const size_t num_entries = (in_size - offset) / sizeof (node);
+      _array = static_cast <node*>  (std::malloc (sizeof (node)  * num_entries));
       if (! _array) {
         LOG(FATAL) << "memory allocation failed";
       }
+      if ((sizeof(node) * num_entries) != 
+	    pread(fileno(fp), _array, sizeof (node) * num_entries, offset)) {
+          LOG(ERROR) << "file=" << fn << " failed to read size=" 
+		    << num_entries * sizeof(node) 
+		    << " offset=" << offset << " errno=" << errno;
+	      return -1;
+      }
+      std::fclose (fp);
+      _size = static_cast <int> (num_entries);
 #ifdef USE_FAST_LOAD
-      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * in_size));
-      _block = static_cast <block*> (std::malloc (sizeof (block) * in_size));
+      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * num_entries));
+      _block = static_cast <block*> (std::malloc (sizeof (block) * num_entries));
       if (! _ninfo || ! _block) {
         LOG(FATAL) << "memory allocation failed";
       }
+      std::string info(fn);
+      info.append(".sbl");
+      fp = std::fopen (info.c_str(), mode);
+      if (! fp) {
+        return -1;
+      }
+      std::fread (&_bheadF, sizeof (int), 1, fp);
+      std::fread (&_bheadC, sizeof (int), 1, fp);
+      std::fread (&_bheadO, sizeof (int), 1, fp);
+      if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp) ||
+          ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
+        return -1;
+      }
+      std::fclose (fp);
+      _capacity = _size;
 #endif
       if (in_size != std::fread (_array, sizeof (node), in_size, fp)) return -1;
       std::fclose (fp);
