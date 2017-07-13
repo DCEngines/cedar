@@ -225,8 +225,9 @@ namespace cedar {
 
     template <typename T>
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val, T& cf) {
-      if (! len && ! from)
-        _err (__FILE__, __LINE__, "failed to insert zero-length key\n");
+      if (! len && ! from) {
+        LOG(FATAL) << "failed to insert zero-length key";
+      }
 #ifndef USE_FAST_LOAD
       if (! _ninfo || ! _block) restore ();
 #endif
@@ -297,15 +298,17 @@ namespace cedar {
     template <typename T>
     void dump (T* result, const size_t result_len) {
 	  int_value_t b;
-      size_t num (0);
-      size_t from (0);
-      size_t p (0);
+      size_t num {0};
+      size_t from {0};
+      size_t p {0};
       for (b.i = begin (from, p); b.i != CEDAR_NO_PATH; b.i = next (from, p))
         if (num < result_len) {
           _set_result (&result[num++], b.x, p, from);
 		  VLOG(1) << b.x << "," << p << "," << from;
 		} else {
-          _err (__FILE__, __LINE__, "dump() needs array of length = num_keys()\n");
+          LOG(WARNING) << "dump() incomplete. Array len=" << result_len 
+		    << " less than " << num_keys();
+          break;
 		}
     }
     int save (const char* fn, const char* mode = "wb") const {
@@ -344,14 +347,16 @@ namespace cedar {
       in_size = (in_size - offset) / sizeof (node);
       if (std::fseek (fp, static_cast <long> (offset), SEEK_SET) != 0) return -1;
       _array = static_cast <node*>  (std::malloc (sizeof (node)  * in_size));
+      if (! _array) {
+        LOG(FATAL) << "memory allocation failed";
+      }
 #ifdef USE_FAST_LOAD
       _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * in_size));
       _block = static_cast <block*> (std::malloc (sizeof (block) * in_size));
-      if (! _array || ! _ninfo || ! _block)
-#else
-        if (! _array)
+      if (! _ninfo || ! _block) {
+        LOG(FATAL) << "memory allocation failed";
+      }
 #endif
-          _err (__FILE__, __LINE__, "memory allocation failed\n");
       if (in_size != std::fread (_array, sizeof (node), in_size, fp)) return -1;
       std::fclose (fp);
       _size = static_cast <int> (in_size);
@@ -459,13 +464,13 @@ namespace cedar {
     bool     _no_delete{false};
     short   _reject[257];
     //
-    static void _err (const char* fn, const int ln, const char* msg)
-    { std::fprintf (stderr, "cedar: %s [%d]: %s", fn, ln, msg); std::exit (1); }
     template <typename T>
     static void _realloc_array (T*& p, const int size_n, const int size_p = 0) {
       void* tmp = std::realloc (p, sizeof (T) * static_cast <size_t> (size_n));
-      if (! tmp)
-        std::free (p), _err (__FILE__, __LINE__, "memory reallocation failed\n");
+      if (! tmp) {
+        std::free (p); 
+        LOG(FATAL) << "memory reallocation failed";
+      }
       p = static_cast <T*> (tmp);
       static const T T0 = T ();
       T *q = p + size_p;
