@@ -330,6 +330,7 @@ namespace cedar {
       std::fwrite (&_bheadF, sizeof (int), 1, fp);
       std::fwrite (&_bheadC, sizeof (int), 1, fp);
       std::fwrite (&_bheadO, sizeof (int), 1, fp);
+      std::fseek(fp, 4096, SEEK_SET); // mmap requires page boundary
       std::fwrite (_ninfo, sizeof (ninfo), static_cast <size_t> (_size), fp);
       std::fwrite (_block, sizeof (block), static_cast <size_t> (ArrayToBlock(_size)), fp);
       std::fclose (fp);
@@ -343,7 +344,7 @@ namespace cedar {
       // get size
       if (! in_size) {
         in_size = lseek(fileno(fp), 0, SEEK_END);
-        if (in_size == (off_t)-1) {
+        if ((off_t)in_size == (off_t)-1) {
           LOG(ERROR) << "lseek on " << fn << " failed errno=" << errno;
           return -1;
         }
@@ -360,7 +361,7 @@ namespace cedar {
       if (! _array) {
         LOG(FATAL) << "memory allocation failed";
       }
-      if ((sizeof(node) * num_entries) != 
+      if ((off_t)(sizeof(node) * num_entries) != 
 	    pread(fileno(fp), _array, sizeof (node) * num_entries, offset)) {
           LOG(ERROR) << "file=" << fn << " failed to read size=" 
 		    << num_entries * sizeof(node) 
@@ -384,6 +385,7 @@ namespace cedar {
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
+      std::fseek(fp, 4096, SEEK_SET); // align to page boundary
       if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp) ||
           ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
         return -1;
@@ -422,11 +424,6 @@ namespace cedar {
       std::fclose (fp);
       _size = static_cast <int> (num_entries);
 #ifdef USE_FAST_LOAD
-      _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * num_entries));
-      _block = static_cast <block*> (std::malloc (sizeof (block) * num_entries));
-      if (! _ninfo || ! _block) {
-        LOG(FATAL) << "memory allocation failed";
-      }
       std::string info(fn);
       info.append(".sbl");
       fp = std::fopen (info.c_str(), mode);
@@ -436,10 +433,23 @@ namespace cedar {
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
-      if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp) ||
-          ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
-        return -1;
+      off_t curoff = 4096; // align mmap to page boundary
+      {
+        map_addr = mmap(NULL, sizeof(ninfo) * num_entries, PROT_READ, MAP_PRIVATE, fileno(fp), curoff);
+        if (map_addr == MAP_FAILED) {
+          LOG(FATAL) << "mmap failed offset=" << curoff << " errno=" << errno; 
+        }
+	    _ninfo = static_cast<ninfo*>(map_addr);
       }
+      curoff += sizeof(ninfo) * num_entries;
+      {
+        map_addr = mmap(NULL, sizeof(block) * ArrayToBlock(num_entries), PROT_READ, MAP_PRIVATE, fileno(fp), curoff);
+        if (map_addr == MAP_FAILED) {
+          LOG(FATAL) << "mmap failed offset=" << curoff << " errno=" << errno; 
+        }
+        _block = static_cast<block*>(map_addr);
+      }
+
       std::fclose (fp);
       _capacity = _size;
 #endif
