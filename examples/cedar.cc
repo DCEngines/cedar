@@ -22,13 +22,13 @@ int main(int argc, char **argv) {
 
   typedef cedar::da <int> trie_t;
   trie_t trie;
-  if (trie.open (argv[1]))
+  if (trie.open_with_mmap(argv[1]))
     { std::fprintf (stderr, "cannot open: %s\n", argv[1]); std::exit (1); }
   //
-  trie_t::result_pair_type   result_pair[NUM_RESULT];
-  trie_t::result_triple_type result_triple[NUM_RESULT];
+  trie_t::result_pair_type   *result_pair = new trie_t::result_pair_type[trie.num_keys()];
+  trie_t::result_triple_type *result_triple = new trie_t::result_triple_type[trie.num_keys()];
 
-  trie.dump(result_pair, NUM_RESULT);
+  trie.dump(result_pair, trie.num_keys());
 
   char line[8192];
   while (std::fgets (line, 8192, stdin)) {
@@ -58,6 +58,8 @@ int main(int argc, char **argv) {
       std::fprintf (stdout, "%s: not found\n", line);
     }
   }
+  delete [] result_pair;
+  delete [] result_triple;
   return 0;
 }
   
