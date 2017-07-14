@@ -17,6 +17,8 @@
 #undef USE_REDUCED_TRIE
 #define USE_EXACT_FIT
 
+#define NEXT_PAGE_BOUNDARY(num) ((num + 4095) & (~(4095)))
+
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
 // each slot in "_block" contains info on 256 contiguous elements in "_array"
@@ -332,6 +334,7 @@ namespace cedar {
       std::fwrite (&_bheadO, sizeof (int), 1, fp);
       std::fseek(fp, 4096, SEEK_SET); // mmap requires page boundary
       std::fwrite (_ninfo, sizeof (ninfo), static_cast <size_t> (_size), fp);
+      std::fseek(fp, 4096 + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * _size), SEEK_SET);
       std::fwrite (_block, sizeof (block), static_cast <size_t> (ArrayToBlock(_size)), fp);
       std::fclose (fp);
 #endif
@@ -386,8 +389,11 @@ namespace cedar {
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
       std::fseek(fp, 4096, SEEK_SET); // align to page boundary
-      if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp) ||
-          ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
+      if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp)) {
+        return -1;
+      }
+      std::fseek(fp, 4096 + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * num_entries), SEEK_SET);
+      if (ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
         return -1;
       }
       std::fclose (fp);
@@ -441,7 +447,7 @@ namespace cedar {
         }
 	    _ninfo = static_cast<ninfo*>(map_addr);
       }
-      curoff += sizeof(ninfo) * num_entries;
+      curoff += NEXT_PAGE_BOUNDARY(sizeof(ninfo) * num_entries);
       {
         map_addr = mmap(NULL, sizeof(block) * ArrayToBlock(num_entries), PROT_READ, MAP_PRIVATE, fileno(fp), curoff);
         if (map_addr == MAP_FAILED) {
