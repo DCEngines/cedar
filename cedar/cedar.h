@@ -459,13 +459,11 @@ namespace cedar {
       _using_mmap = true;
       return 0;
     }
-#if  (USE_FAST_LOAD == 0)
     void restore () { // restore information to update
       if (! _block) _restore_block ();
       if (! _ninfo) _restore_ninfo ();
       _capacity = _size;
     }
-#endif
     void set_array (void* p, size_t in_size = 0) { // ad-hoc
       clear (false);
       _array = static_cast <node*> (p);
@@ -636,7 +634,6 @@ namespace cedar {
 	  VLOG(1) << "find key=" << key << ",retval=" << retval;
 	  return retval;
     }
-#if (USE_FAST_LOAD == 0)
     void _restore_ninfo () {
       _realloc_array (_ninfo, _size);
       for (int to = 0; to < _size; ++to) {
@@ -664,7 +661,6 @@ namespace cedar {
         _push_block (bi, head_out, ! head_out && b.num);
       }
     }
-#endif
     void _set_result (result_type* x, value_type r, size_t = 0, size_t = 0) const
     { *x = r; }
     void _set_result (result_pair_type* x, value_type r, size_t l, size_t = 0) const

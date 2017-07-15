@@ -425,7 +425,6 @@ namespace cedar {
 #endif
       return 0;
     }
-#ifndef USE_FAST_LOAD
     void restore () { // restore information to update
       if (! _block) _restore_block ();
       if (! _ninfo) _restore_ninfo ();
@@ -433,7 +432,6 @@ namespace cedar {
       _quota  = *_length;
       _quota0 = 1;
     }
-#endif
     void set_array (void* p, size_t size_ = 0) { // ad-hoc
       clear (false);
       if (size_)
@@ -585,7 +583,6 @@ namespace cedar {
       if (tail[pos]) return CEDAR_NO_VALUE;  // input < tail
       return *reinterpret_cast <const int*> (&tail[len + 1]);
     }
-#ifndef USE_FAST_LOAD
     void _restore_ninfo () {
       _realloc_array (_ninfo, _size);
       for (int to = 0; to < _size; ++to) {
@@ -609,7 +606,6 @@ namespace cedar {
         _push_block (bi, head_out, ! head_out && b.num);
       }
     }
-#endif
     void _set_result (result_type* x, value_type r, size_t = 0, npos_t = 0) const
     { *x = r; }
     void _set_result (result_pair_type* x, value_type r, size_t l, npos_t = 0) const
