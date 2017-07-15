@@ -12,6 +12,7 @@
 #include <cedar.h>
 #endif
 #include <gflags/gflags.h>
+#include <memory>
 
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -25,16 +26,16 @@ int main(int argc, char **argv) {
 
   const size_t num_keys = trie.num_keys();
   //
-  trie_t::result_pair_type   *result_pair = new trie_t::result_pair_type[num_keys];
-  trie_t::result_triple_type *result_triple = new trie_t::result_triple_type[num_keys];
+  std::unique_ptr<trie_t::result_pair_type[]>   result_pair (new trie_t::result_pair_type[num_keys]);
+  std::unique_ptr<trie_t::result_triple_type[]> result_triple (new trie_t::result_triple_type[num_keys]);
 
-  trie.dump(result_pair, num_keys);
+  trie.dump(result_pair.get(), num_keys);
 
   char line[8192];
   while (std::fgets (line, 8192, stdin)) {
     line[std::strlen (line) - 1] = '\0';
     std::fprintf (stdout, "commonPrefixSearch ():\n");
-    if (const size_t n = trie.commonPrefixSearch (line, result_pair, num_keys)) {
+    if (const size_t n = trie.commonPrefixSearch (line, result_pair.get(), num_keys)) {
       std::fprintf (stdout, "%s: found, num=%ld ", line, n);
       for (size_t i = 0; i < n; ++i) {
         if (i >= num_keys) { std::fprintf (stdout, " ..truncated"); break; }
@@ -46,7 +47,7 @@ int main(int argc, char **argv) {
     }
     char suffix[1024];
     std::fprintf (stdout, "commonPrefixPredict ():\n");
-    if (const size_t n = trie.commonPrefixPredict (line, result_triple, num_keys)) {
+    if (const size_t n = trie.commonPrefixPredict (line, result_triple.get(), num_keys)) {
       std::fprintf (stdout, "%s: found, num=%ld ", line, n);
       for (size_t i = 0; i < n; ++i) {
         if (i >= num_keys) { std::fprintf (stdout, " ..truncated"); break; }
@@ -58,8 +59,6 @@ int main(int argc, char **argv) {
       std::fprintf (stdout, "%s: not found\n", line);
     }
   }
-  delete [] result_pair;
-  delete [] result_triple;
   return 0;
 }
   
