@@ -11,11 +11,7 @@
 #include <glog/logging.h>
 #include <sys/mman.h>
 
-// TODO set this config via cmake
-#undef USE_FAST_LOAD
-#undef USE_PREFIX_TRIE
-#undef USE_REDUCED_TRIE
-#define USE_EXACT_FIT
+#include <cedar_config.h>
 
 #define CEDAR_PAGE_SIZE 4096
 #define NEXT_PAGE_BOUNDARY(num) ((num + (CEDAR_PAGE_SIZE - 1)) & (~((CEDAR_PAGE_SIZE - 1))))
@@ -75,7 +71,7 @@ namespace cedar {
       int  check;                             // negative means next empty index
       node (const int base__ = 0, const int check_ = 0)
         : base_ (base__), check (check_) {}
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       int base () const { return - (base_ + 1); } // ~ in two's complement system
 #else
       int base () const { return base_; }
@@ -129,7 +125,7 @@ namespace cedar {
     size_t num_keys () const {
       size_t i = 0;
       for (int to = 0; to < _size; ++to)
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
         if (_array[to].check >= 0 && _array[to].value >= 0) ++i;
 #else
         if (_array[to].check >= 0 && 
@@ -234,12 +230,12 @@ namespace cedar {
       if (! len && ! from) {
         LOG(FATAL) << "failed to insert zero-length key";
       }
-#ifndef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 0)
       if (! _ninfo || ! _block) restore ();
 #endif
       for (const uchar* const key_ = reinterpret_cast <const uchar*> (key);
            pos < len; ++pos) {
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
         const value_type val_ = _array[from].value;
         if (val_ >= 0 && val_ != CEDAR_VALUE_LIMIT) // always new; correct this!
           { const int to = _follow (from, 0, cf); _array[to].value = val_; }
@@ -247,7 +243,7 @@ namespace cedar {
         LOG_IF(FATAL, key_[pos] == 0) << "char 0 in string does not work with xor calcs";
         from = static_cast <size_t> (_follow (from, key_[pos], cf));
       }
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       const int to = _array[from].value >= 0 ? static_cast <int> (from) : _follow (from, 0, cf);
       if (_array[to].value == CEDAR_VALUE_LIMIT) _array[to].value = 0;
 #else
@@ -276,7 +272,7 @@ namespace cedar {
 	 */
     void erase (size_t from) {
       // _test ();
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       int e = _array[from].value >= 0 ? static_cast <int> (from) : _array[from].base () ^ 0;
       from = static_cast <size_t> (_array[e].check);
 #else
@@ -325,7 +321,7 @@ namespace cedar {
       if (! fp) return -1;
       std::fwrite (_array, sizeof (node), static_cast <size_t> (_size), fp);
       std::fclose (fp);
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       std::string info(fn);
       info.append(".sbl");
       fp = std::fopen (info.c_str(), mode);
@@ -374,7 +370,7 @@ namespace cedar {
       }
       std::fclose (fp);
       _size = static_cast <int> (num_entries);
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * num_entries));
       _block = static_cast <block*> (std::malloc (sizeof (block) * num_entries));
       if (! _ninfo || ! _block) {
@@ -430,7 +426,7 @@ namespace cedar {
 	  _array = static_cast<node*>(map_addr);
       std::fclose (fp);
       _size = static_cast <int> (num_entries);
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       std::string info(fn);
       info.append(".sbl");
       fp = std::fopen (info.c_str(), mode);
@@ -463,7 +459,7 @@ namespace cedar {
       _using_mmap = true;
       return 0;
     }
-#ifndef USE_FAST_LOAD
+#if  (USE_FAST_LOAD == 0)
     void restore () { // restore information to update
       if (! _block) _restore_block ();
       if (! _ninfo) _restore_ninfo ();
@@ -497,7 +493,7 @@ namespace cedar {
     }
     // return the first child for a tree rooted by a given node
     int begin (size_t& from, size_t& len) {
-#ifndef USE_FAST_LOAD
+#if  (USE_FAST_LOAD == 0)
       if (! _ninfo) _restore_ninfo ();
 #endif
       int   base = _array[from].base ();
@@ -508,7 +504,7 @@ namespace cedar {
         from = static_cast <size_t> (_array[from].base ()) ^ c;
         c    = _ninfo[from].child;
       }
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       if (_array[from].value >= 0) return _array[from].value;
 #endif
       return _array[_array[from].base () ^ c].base_;
@@ -516,7 +512,7 @@ namespace cedar {
     // return the next child if any
     int next (size_t& from, size_t& len, const size_t root = 0) {
       uchar c = 0;
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       if (_array[from].value < 0)
 #endif
         c = _ninfo[_array[from].base () ^ 0].sibling;
@@ -580,7 +576,7 @@ namespace cedar {
       _realloc_array (_array, 256, 256);
       _realloc_array (_ninfo, 256);
       _realloc_array (_block, 1);
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       _array[0] = node (-1, -1);
 #else
       _array[0] = node (0, -1);
@@ -614,7 +610,7 @@ namespace cedar {
 	  VLOG(1) << "find key=" << key << ",from=" << from << ",pos=" << pos << ",len=" << len;
       for (const uchar* const key_ = reinterpret_cast <const uchar*> (key);
            pos < len; ++pos ) { // follow link
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
         if (_array[from].value >= 0) break;
 #endif
         size_t to = static_cast <size_t> (_array[from].base ()); 
@@ -625,7 +621,7 @@ namespace cedar {
 	    VLOG(1) << "find char=" << key_[pos] << ",from=" << from << ",to=" << to;
         from = to;
       }
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       if (_array[from].value >= 0) // get value from leaf
         return pos == len ? _array[from].value : CEDAR_NO_PATH; // only allow integer key
 #endif
@@ -640,7 +636,7 @@ namespace cedar {
 	  VLOG(1) << "find key=" << key << ",retval=" << retval;
 	  return retval;
     }
-#ifndef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 0)
     void _restore_ninfo () {
       _realloc_array (_ninfo, _size);
       for (int to = 0; to < _size; ++to) {
@@ -700,7 +696,7 @@ namespace cedar {
     }
     int _add_block () {
       if (_size == _capacity) { // allocate memory if needed
-#ifdef USE_EXACT_FIT
+#if (USE_EXACT_FIT == 1)
         _capacity += _size >= MAX_ALLOC_SIZE ? MAX_ALLOC_SIZE : _size;
 #else
         _capacity += _capacity;
@@ -749,7 +745,7 @@ namespace cedar {
         }
       }
       // initialize the released node
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       n.value = CEDAR_VALUE_LIMIT; n.check = from;
       if (base < 0) _array[from].base_ = - (e ^ label) - 1;
 #else
@@ -912,7 +908,7 @@ namespace cedar {
       const int from  = flag ? static_cast <int> (from_n) : from_p;
       const int base_ = flag ? base_n : base_p;
       if (flag && *first == label_n) _ninfo[from].child = label_n; // new child
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
       _array[from].base_ = -base - 1; // new base
 #else
       _array[from].base_ = base; // new base
@@ -925,7 +921,7 @@ namespace cedar {
         cf (to_, to); // user-defined callback function to handle moved nodes
         node& n  = _array[to];
         node& n_ = _array[to_];
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
         if ((n.base_ = n_.base_) < 0 && *p) // copy base; bug fix
 #else
         if ((n.base_ = n_.base_) > 0 && *p) // copy base; bug fix
@@ -942,7 +938,7 @@ namespace cedar {
         if (! flag && to_ == to_pn) { // the address is immediately used
           _push_sibling (from_n, to_pn ^ label_n, label_n);
           _ninfo[to_].child = 0; // remember to reset child
-#ifdef USE_REDUCED_TRIE
+#if (USE_REDUCED_TRIE == 1)
           n_.value = CEDAR_VALUE_LIMIT;
 #else
           if (label_n) n_.base_ = -1; else n_.value = value_type (0);

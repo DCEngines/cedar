@@ -33,6 +33,16 @@ endif()
 set(CMAKE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(CMAKE_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
+# create cedar_config.h header file
+set (USE_FAST_LOAD 1)
+set (USE_PREFIX_TRIE 0)
+set (USE_REDUCED_TRIE 0)
+set (USE_EXACT_FIT 1)
+
+configure_file ("${PROJECT_SOURCE_DIR}/cedar/cedar_config.h.in"
+                "${PROJECT_BINARY_DIR}/cedar_config.h" )
+include_directories(${PROJECT_BINARY_DIR})
+
 # this will prohibit in-source-builds
 if(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
   message(STATUS "In-source-builds are not allowed")
