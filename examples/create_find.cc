@@ -28,18 +28,21 @@ int main (int argc, char **argv) {
   printf("seed is %d\n", pid);
 
   // do not generate char = 0
-  std::uniform_int_distribution<int> charGen(1, 255);
-  std::uniform_int_distribution<int> lengthGen(20, 400);
+  constexpr size_t kMaxLineSize = 10;
+  std::uniform_int_distribution<int> charGen(97, 122);
+  std::uniform_int_distribution<int> lengthGen(5, kMaxLineSize);
 
   cedar::da <int> trie;
-  char line[1024];
-  int num_strings = 100000;
+  char line[kMaxLineSize + 1];
+  int num_strings = 100;
   for (int i = 0; i < num_strings; i++) {
 	int length = lengthGen(generator);
     for (int pos = 0; pos < length; pos ++) {
 		line[pos] = charGen(generator);
 	}
   	trie.update (line, length - 1, i);
+	line[length] = '\0';
+	printf("%s\n", line);
 	LOG_EVERY_N(INFO, 10000) << i;
   }
 

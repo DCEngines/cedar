@@ -13,8 +13,6 @@
 #endif
 #include <gflags/gflags.h>
 
-static const size_t NUM_RESULT = 1024;
-
 int main(int argc, char **argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   if (argc < 2)
@@ -24,20 +22,22 @@ int main(int argc, char **argv) {
   trie_t trie;
   if (trie.open_with_mmap(argv[1]))
     { std::fprintf (stderr, "cannot open: %s\n", argv[1]); std::exit (1); }
-  //
-  trie_t::result_pair_type   *result_pair = new trie_t::result_pair_type[trie.num_keys()];
-  trie_t::result_triple_type *result_triple = new trie_t::result_triple_type[trie.num_keys()];
 
-  trie.dump(result_pair, trie.num_keys());
+  const size_t num_keys = trie.num_keys();
+  //
+  trie_t::result_pair_type   *result_pair = new trie_t::result_pair_type[num_keys];
+  trie_t::result_triple_type *result_triple = new trie_t::result_triple_type[num_keys];
+
+  trie.dump(result_pair, num_keys);
 
   char line[8192];
   while (std::fgets (line, 8192, stdin)) {
     line[std::strlen (line) - 1] = '\0';
     std::fprintf (stdout, "commonPrefixSearch ():\n");
-    if (const size_t n = trie.commonPrefixSearch (line, result_pair, NUM_RESULT)) {
+    if (const size_t n = trie.commonPrefixSearch (line, result_pair, num_keys)) {
       std::fprintf (stdout, "%s: found, num=%ld ", line, n);
       for (size_t i = 0; i < n; ++i) {
-        if (i >= NUM_RESULT) { std::fprintf (stdout, " ..truncated"); break; }
+        if (i >= num_keys) { std::fprintf (stdout, " ..truncated"); break; }
         std::fprintf (stdout, " %d:%ld", result_pair[i].value, result_pair[i].length);
       }
       std::fprintf (stdout, "\n");
@@ -46,10 +46,10 @@ int main(int argc, char **argv) {
     }
     char suffix[1024];
     std::fprintf (stdout, "commonPrefixPredict ():\n");
-    if (const size_t n = trie.commonPrefixPredict (line, result_triple, NUM_RESULT)) {
+    if (const size_t n = trie.commonPrefixPredict (line, result_triple, num_keys)) {
       std::fprintf (stdout, "%s: found, num=%ld ", line, n);
       for (size_t i = 0; i < n; ++i) {
-        if (i >= NUM_RESULT) { std::fprintf (stdout, " ..truncated"); break; }
+        if (i >= num_keys) { std::fprintf (stdout, " ..truncated"); break; }
         trie.suffix (suffix, result_triple[i].length, result_triple[i].id);
         std::fprintf (stdout, " %d:%ld:%ld:%s", result_triple[i].value, result_triple[i].length, result_triple[i].id, suffix);
       }

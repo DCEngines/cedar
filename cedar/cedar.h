@@ -17,7 +17,8 @@
 #undef USE_REDUCED_TRIE
 #define USE_EXACT_FIT
 
-#define NEXT_PAGE_BOUNDARY(num) ((num + 4095) & (~(4095)))
+#define CEDAR_PAGE_SIZE 4096
+#define NEXT_PAGE_BOUNDARY(num) ((num + (CEDAR_PAGE_SIZE - 1)) & (~((CEDAR_PAGE_SIZE - 1))))
 
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
@@ -332,9 +333,9 @@ namespace cedar {
       std::fwrite (&_bheadF, sizeof (int), 1, fp);
       std::fwrite (&_bheadC, sizeof (int), 1, fp);
       std::fwrite (&_bheadO, sizeof (int), 1, fp);
-      std::fseek(fp, 4096, SEEK_SET); // mmap requires page boundary
+      std::fseek(fp, CEDAR_PAGE_SIZE, SEEK_SET); // mmap requires page boundary
       std::fwrite (_ninfo, sizeof (ninfo), static_cast <size_t> (_size), fp);
-      std::fseek(fp, 4096 + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * _size), SEEK_SET);
+      std::fseek(fp, CEDAR_PAGE_SIZE + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * _size), SEEK_SET);
       std::fwrite (_block, sizeof (block), static_cast <size_t> (ArrayToBlock(_size)), fp);
       std::fclose (fp);
 #endif
@@ -388,11 +389,11 @@ namespace cedar {
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
-      std::fseek(fp, 4096, SEEK_SET); // align to page boundary
+      std::fseek(fp, CEDAR_PAGE_SIZE, SEEK_SET); // align to page boundary
       if (num_entries != std::fread (_ninfo, sizeof (ninfo), num_entries, fp)) {
         return -1;
       }
-      std::fseek(fp, 4096 + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * num_entries), SEEK_SET);
+      std::fseek(fp, CEDAR_PAGE_SIZE + NEXT_PAGE_BOUNDARY(sizeof(ninfo) * num_entries), SEEK_SET);
       if (ArrayToBlock(num_entries) != std::fread (_block, sizeof (block), ArrayToBlock(num_entries), fp)) {
         return -1;
       }
@@ -408,7 +409,7 @@ namespace cedar {
       // get size
       if (! in_size) {
         in_size = lseek(fileno(fp), 0, SEEK_END);
-        if (in_size == (off_t)-1) {
+        if (in_size == (size_t)-1) {
           LOG(ERROR) << "lseek on " << fn << " failed errno=" << errno;
           return -1;
         }
@@ -422,7 +423,7 @@ namespace cedar {
       clear (false);
       const size_t num_entries = (in_size - offset) / sizeof (node);
 
-      void* map_addr = mmap(NULL, sizeof(node) * in_size, PROT_READ, MAP_SHARED, fileno(fp), offset);
+      void* map_addr = mmap(NULL, sizeof(node) * num_entries, PROT_READ, MAP_SHARED, fileno(fp), offset);
       if (map_addr == MAP_FAILED) {
         LOG(FATAL) << "mmap failed"; 
       }
@@ -439,7 +440,7 @@ namespace cedar {
       std::fread (&_bheadF, sizeof (int), 1, fp);
       std::fread (&_bheadC, sizeof (int), 1, fp);
       std::fread (&_bheadO, sizeof (int), 1, fp);
-      off_t curoff = 4096; // align mmap to page boundary
+      off_t curoff = CEDAR_PAGE_SIZE; // align mmap to page boundary
       {
         map_addr = mmap(NULL, sizeof(ninfo) * num_entries, PROT_READ, MAP_PRIVATE, fileno(fp), curoff);
         if (map_addr == MAP_FAILED) {
@@ -459,6 +460,7 @@ namespace cedar {
       std::fclose (fp);
       _capacity = _size;
 #endif
+      _using_mmap = true;
       return 0;
     }
 #ifndef USE_FAST_LOAD
@@ -476,9 +478,19 @@ namespace cedar {
     }
     const void* array () const { return _array; }
     void clear (const bool reuse = true) {
-      if (_array && not _no_delete) { std::free (_array); _array = 0; }
-      if (_ninfo) { std::free (_ninfo); _ninfo = 0; }
-      if (_block) { std::free (_block); _block = 0; }
+	  if (_using_mmap) {
+	    munmap(_array, _size * sizeof(node));
+		munmap(_ninfo, _size * sizeof(ninfo));
+		munmap(_block, _size * sizeof(block));
+		_using_mmap = false;
+	  } else {
+	    if (not _no_delete) { std::free(_array); }
+	    std::free(_ninfo);
+	    std::free(_block);
+	  }
+      _array = 0; 
+      _ninfo = 0; 
+      _block = 0; 
       _bheadF = _bheadC = _bheadO = _capacity = _size = 0; // *
       if (reuse) _initialize ();
       _no_delete = false;
@@ -546,6 +558,7 @@ namespace cedar {
     int     _capacity{0};
     int     _size{0};
     bool     _no_delete{false};
+    bool    _using_mmap{false};
     short   _reject[257];
     //
     template <typename T>
