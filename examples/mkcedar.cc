@@ -3,9 +3,7 @@
 // Copyright (c) 2013-2014 Naoki Yoshinaga <ynaga@tkl.iis.u-tokyo.ac.jp>
 #include <cstdio>
 #include <cstdlib>
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+
 #ifdef USE_PREFIX_TRIE
 #include <cedarpp.h>
 #else

@@ -1,9 +1,7 @@
 
 #include <cstdio>
 #include <cstdlib>
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+
 #ifdef USE_PREFIX_TRIE
 #include <cedarpp.h>
 #else
@@ -42,7 +40,6 @@ int main (int argc, char **argv) {
 	}
   	trie.update (line, length - 1, i);
 	line[length] = '\0';
-	printf("%s\n", line);
 	LOG_EVERY_N(INFO, 10000) << i;
   }
 

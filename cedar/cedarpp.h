@@ -10,11 +10,7 @@
 #include <climits>
 #include <cassert>
 
-// TODO set this config via cmake
-#undef USE_FAST_LOAD
-#undef USE_PREFIX_TRIE
-#undef USE_REDUCED_TRIE
-#undef USE_EXACT_FIT
+#include <cedar_config.h>
 
 #define STATIC_ASSERT(e, msg) typedef char msg[(e) ? 1 : -1]
 
@@ -185,7 +181,7 @@ namespace cedar {
     value_type& update (const char* key, npos_t& from, size_t& pos, size_t len, value_type val, T& cf) {
       if (! len && ! from)
         _err (__FILE__, __LINE__, "failed to insert zero-length key\n");
-#ifndef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 0)
       if (! _ninfo || ! _block) restore ();
 #endif
       npos_t offset = from >> 32;
@@ -237,7 +233,7 @@ namespace cedar {
         moved += offset;
         for (npos_t i = offset; i <= moved; i += 1 + sizeof (value_type)) {
           if (_quota0 == ++*_length0) {
-#ifdef USE_EXACT_FIT
+#if (USE_EXACT_FIT == 1)
             _quota0 += *_length0 >= MAX_ALLOC_SIZE ? MAX_ALLOC_SIZE : *_length0;
 #else
             _quota0 += _quota0;
@@ -263,7 +259,7 @@ namespace cedar {
         return *reinterpret_cast <value_type*> (&_tail[offset0 + 1]) = val;
       }
       if (_quota < *_length + needed) {
-#ifdef USE_EXACT_FIT
+#if (USE_EXACT_FIT == 1)
         _quota += needed > *_length || needed > MAX_ALLOC_SIZE ? needed :
                   (*_length >= MAX_ALLOC_SIZE ? MAX_ALLOC_SIZE : *_length);
 #else
@@ -354,7 +350,7 @@ namespace cedar {
       std::fwrite (_tail,  sizeof (char), static_cast <size_t> (*_length), fp);
       std::fwrite (_array, sizeof (node), static_cast <size_t> (_size), fp);
       std::fclose (fp);
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       const char* const info
         = std::strcat (std::strcpy (new char[std::strlen (fn) + 5], fn), ".sbl");
       fp = std::fopen (info, mode);
@@ -391,7 +387,7 @@ namespace cedar {
       _array = static_cast <node*>  (std::malloc (sizeof (node)  * size_));
       _tail  = static_cast <char*>  (std::malloc (length_));
       _tail0 = static_cast <int*>   (std::malloc (sizeof (int)));
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       _ninfo = static_cast <ninfo*> (std::malloc (sizeof (ninfo) * size_));
       _block = static_cast <block*> (std::malloc (sizeof (block) * size_));
       if (! _array || ! _tail || ! _tail0 || ! _ninfo || ! _block)
@@ -406,7 +402,7 @@ namespace cedar {
       std::fclose (fp);
       _size = static_cast <int> (size_);
       *_length0 = 0;
-#ifdef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 1)
       const char* const info
         = std::strcat (std::strcpy (new char[std::strlen (fn) + 5], fn), ".sbl");
       fp = std::fopen (info, mode);
@@ -455,7 +451,7 @@ namespace cedar {
     }
     // return the first child for a tree rooted by a given node
     int begin (npos_t& from, size_t& len) {
-#ifndef USE_FAST_LOAD
+#if (USE_FAST_LOAD == 0)
       if (! _ninfo) _restore_ninfo ();
 #endif
       int base = from >> 32 ? - static_cast <int> (from >> 32) : _array[from].base;
@@ -635,7 +631,7 @@ namespace cedar {
     }
     int _add_block () {
       if (_size == _capacity) { // allocate memory if needed
-#ifdef USE_EXACT_FIT
+#if (USE_EXACT_FIT == 1)
         _capacity += _size >= MAX_ALLOC_SIZE ? MAX_ALLOC_SIZE : _size;
 #else
         _capacity += _capacity;
