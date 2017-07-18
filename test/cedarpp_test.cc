@@ -1,14 +1,18 @@
+// For prefix tries
 #include <cstdio>
 #include <cstdlib>
 #include <cedar_config.h>
 
-#include <cedar.h>
+#include <cedarpp.h>
 
 #include <gtest/gtest.h>
 
 typedef cedar::da <int> trie_int_t;
 
-TEST(cedar, match_and_predict) {
+/**
+ * TODO : test code duplicated with cedar_test
+ */
+TEST(cedarpp, match_and_predict) {
 	trie_int_t trie;
 
 	static size_t constexpr kMaxStrings = 3;
