@@ -76,6 +76,11 @@ add_compile_options(
   -ffunction-sections
 )
 
+# to enable ADD_TEST command, and "make test" and "ctest"
+enable_testing()
+
 add_subdirectory(examples)
 add_subdirectory(benchmark)
+add_subdirectory(test)
+
 
