@@ -61,7 +61,7 @@ namespace cedar {
     struct result_triple_type { // for predict ()
       value_type  value;
       size_t      length;  // suffix length
-      size_t      id;      // node id of value
+      size_t      id;      // last slot in _array where string ends 
     };
 
 	// check field stores addr of parent node
@@ -119,42 +119,63 @@ namespace cedar {
     size_t nonzero_size () const {
       size_t i = 0;
       for (int to = 0; to < _size; ++to)
-        if (_array[to].check >= 0) ++i;
+        if (_array[to].check >= 0) {
+		  ++i;
+        }
       return i;
     }
     size_t num_keys () const {
       size_t i = 0;
-      for (int to = 0; to < _size; ++to)
+      for (int to = 0; to < _size; ++to) {
 #if (USE_REDUCED_TRIE == 1)
-        if (_array[to].check >= 0 && _array[to].value >= 0) ++i;
+        if (_array[to].check >= 0 && _array[to].value >= 0)
 #else
         if (_array[to].check >= 0 && 
 		  // i.e. array[parent].base == to
-		  _array[_array[to].check].base () == to) {
+		  _array[_array[to].check].base () == to) 
+#endif
+        {
 		    ++i;
 		}
-#endif
+      }
       return i;
     }
-    // interfance
+
+	/**
+	 * does given key exist
+	 */
     template <typename T>
     T exactMatchSearch (const char* key) const
     { return exactMatchSearch <T> (key, std::strlen (key)); }
+
+	/**
+	 * does given key exist
+	 */
     template <typename T>
     T exactMatchSearch (const char* key, size_t len, size_t from = 0) const {
       int_value_t b;
       size_t pos = 0;
       b.i = _find (key, from, pos, len);
-      if (b.i == CEDAR_NO_PATH) b.i = CEDAR_NO_VALUE;
+      if (b.i == CEDAR_NO_PATH) { 
+        b.i = CEDAR_NO_VALUE;
+      }
       T result;
       _set_result (&result, b.x, len, from);
       return result;
     }
+	/**
+	 * return all strings in trie which are prefix of "key"
+	 * e.g. if key="abcd", return "ab", "abc" etc
+	 */
     template <typename T>
     size_t commonPrefixSearch (const char* key, T* result, size_t result_len) const
     { 
 	  return commonPrefixSearch (key, result, result_len, std::strlen (key)); 
     }
+	/**
+	 * return all strings in trie which are prefix of "key"
+	 * e.g. if key="abcd", return "ab", "abc" etc
+	 */
     template <typename T>
     size_t commonPrefixSearch (const char* key, T* result, size_t result_len, size_t len, size_t from = 0) const {
       size_t num = 0;
@@ -162,7 +183,9 @@ namespace cedar {
         int_value_t b;
         b.i = _find (key, from, pos, pos + 1);
         if (b.i == CEDAR_NO_VALUE) continue;
-        if (b.i == CEDAR_NO_PATH)  return num;
+        if (b.i == CEDAR_NO_PATH) {
+          return num;
+        }
         if (num < result_len) {
 		  _set_result (&result[num], b.x, pos, from);
 		}
@@ -170,10 +193,19 @@ namespace cedar {
       }
       return num;
     }
-    // predict key from double array
+	/**
+	 * return all strings in trie which are completions of "key"
+	 * e.g. if key="ab", return "abc", "abcd" etc
+	 */
     template <typename T>
     size_t commonPrefixPredict (const char* key, T* result, size_t result_len)
-    { return commonPrefixPredict (key, result, result_len, std::strlen (key)); }
+    { 
+      return commonPrefixPredict (key, result, result_len, std::strlen (key)); 
+    }
+	/**
+	 * return all strings in trie which are completions of "key"
+	 * e.g. if key="ab", return "abc", "abcd" etc
+	 */
     template <typename T>
     size_t commonPrefixPredict (const char* key, T* result, size_t result_len, size_t len, size_t from = 0) {
       size_t num (0), pos (0), p (0);
@@ -183,12 +215,19 @@ namespace cedar {
 	  int_value_t b;
       size_t root = from;
       for (b.i = begin (from, p); b.i != CEDAR_NO_PATH; b.i = next (from, p, root)) {
-        if (num < result_len) _set_result (&result[num], b.x, p, from);
+        if (num < result_len) {
+          _set_result (&result[num], b.x, p, from);
+        }
         ++num;
       }
       return num;
     }
-	// walk back the trie from "to" slot to fill the passed in "key"
+	/**
+	 * walk back the trie from the leaf to the root of trie
+	 *        and fill the passed-in key with the string
+	 * @param to   a leaf node in the trie
+	 * @param key  copy out string stored in trie 
+	 */
     void suffix (char* key, size_t len, size_t to) const {
       key[len] = '\0';
       while (len--) {
@@ -198,8 +237,9 @@ namespace cedar {
         to = static_cast <size_t> (from);
       }
     }
-    value_type traverse (const char* key, size_t& from, size_t& pos) const
-    { return traverse (key, from, pos, std::strlen (key)); }
+    value_type traverse (const char* key, size_t& from, size_t& pos) const { 
+      return traverse (key, from, pos, std::strlen (key)); 
+    }
     value_type traverse (const char* key, size_t& from, size_t& pos, size_t len) const {
 	  int_value_t b;
       b.i = _find (key, from, pos, len);
@@ -207,6 +247,9 @@ namespace cedar {
     }
     struct empty_callback { void operator () (const int, const int) {} }; // dummy empty function
 
+	/**
+	 * insert the "key" into the trie
+	 */
     value_type& update (const char* key)
     { 
       return update (key, std::strlen (key)); 
@@ -245,7 +288,9 @@ namespace cedar {
       }
 #if (USE_REDUCED_TRIE == 1)
       const int to = _array[from].value >= 0 ? static_cast <int> (from) : _follow (from, 0, cf);
-      if (_array[to].value == CEDAR_VALUE_LIMIT) _array[to].value = 0;
+      if (_array[to].value == CEDAR_VALUE_LIMIT) {
+        _array[to].value = 0;
+      }
 #else
       const int to = _follow (from, 0, cf);
 #endif
@@ -253,10 +298,15 @@ namespace cedar {
       VLOG(1) << "------------------------";
       return _array[to].value += val;
     }
-    // easy-going erase () without compression
+	/**
+	 * easy-going erase () without compression
+	 */
     int erase (const char* key) { 
 	  return erase (key, std::strlen (key)); 
     }
+	/**
+	 * erase 
+	 */
     int erase (const char* key, size_t len, size_t from = 0) {
       size_t pos = 0;
       const int i = _find (key, from, pos, len);
@@ -293,6 +343,10 @@ namespace cedar {
       // termination condition (!flag) indicates if the trie has a branch, 
       // then do not free nodes which are common(shared) with another branch
     }
+
+	/**
+	 * insert an array of strings into the trie
+	 */
     int build (size_t num, const char** key, const size_t* len = 0, const value_type* val = 0) {
       for (size_t i = 0; i < num; ++i) {
         update (key[i], len ? len[i] : std::strlen (key[i]), val ? val[i] : value_type (i));
@@ -398,6 +452,10 @@ namespace cedar {
 #endif
       return 0;
     }
+
+	/** 
+	 * open the trie file using mmap()
+	 */
     int open_with_mmap (const char* fn, const char* mode = "rb",
               const size_t offset = 0, size_t in_size = 0) {
       FILE* fp = std::fopen (fn, mode);
@@ -471,6 +529,10 @@ namespace cedar {
       _no_delete = true;
     }
     const void* array () const { return _array; }
+
+	/**
+	 * free all memory
+	 */
     void clear (const bool reuse = true) {
 	  if (_using_mmap) {
 	    munmap(_array, _size * sizeof(node));
@@ -489,7 +551,11 @@ namespace cedar {
       if (reuse) _initialize ();
       _no_delete = false;
     }
-    // return the first child for a tree rooted by a given node
+
+	/**
+	 * iterator start
+	 * return the first child for a tree rooted by a given node
+	 */
     int begin (size_t& from, size_t& len) {
 #if  (USE_FAST_LOAD == 0)
       if (! _ninfo) _restore_ninfo ();
@@ -507,7 +573,11 @@ namespace cedar {
 #endif
       return _array[_array[from].base () ^ c].base_;
     }
-    // return the next child if any
+
+	/**
+	 * iterator next
+	 * return the next child if any
+	 */
     int next (size_t& from, size_t& len, const size_t root = 0) {
       uchar c = 0;
 #if (USE_REDUCED_TRIE == 1)
@@ -522,12 +592,15 @@ namespace cedar {
         begin (from = static_cast <size_t> (_array[from].base ()) ^ c, ++len) :
         CEDAR_NO_PATH;
     }
-    // test the validity of double array for debug
+	/**
+	 * test the validity of double array for debug
+	 */
     void test (const size_t from = 0) const {
       const int base = _array[from].base ();
       uchar c = _ninfo[from].child;
       do {
         if (from) { 
+		   // i.e. cur->next->prev = cur
 		   assert (_array[base ^ c].check == static_cast <int> (from));
 		}
         if (c  && _array[base ^ c].value < 0) { // correct this 
@@ -587,13 +660,15 @@ namespace cedar {
       for (short  i = 0; i <= 256; ++i) _reject[i] = i + 1;
     }
 
-    // follow/create edge
+	/**
+	 * follow or create an edge from "from" with "label"
+	 */
     template <typename T>
     int _follow (size_t& from, const uchar& label, T& cf) {
       int to = 0;
       const int base = _array[from].base ();
       if (base < 0 || _array[to = base ^ label].check < 0) {
-        // if char does not exist, then create new edge
+        // if label does not exist, then create new edge
         to = _pop_enode (base, label, static_cast <int> (from));
         _push_sibling (from, to ^ label, label, base >= 0);
       } else if (_array[to].check != static_cast <int> (from)) {
@@ -603,7 +678,9 @@ namespace cedar {
       return to;
     }
 
-    // find key from double array
+	/**
+	 * find key in double array
+	 */
     int _find (const char* key, size_t& from, size_t& pos, const size_t len) const {
 	  VLOG(1) << "find key=" << key << ",from=" << from << ",pos=" << pos << ",len=" << len;
       for (const uchar* const key_ = reinterpret_cast <const uchar*> (key);
@@ -645,6 +722,7 @@ namespace cedar {
                          ! from || _ninfo[from].child || _array[base ^ 0].check == from);
       }
     }
+
     void _restore_block () {
       _realloc_array (_block, ArrayToBlock(_size));
       _bheadF = _bheadC = _bheadO = 0;
@@ -661,6 +739,10 @@ namespace cedar {
         _push_block (bi, head_out, ! head_out && b.num);
       }
     }
+
+	/**
+	 * general purpose func to fill in result_pair or result_triple_type
+	 */
     void _set_result (result_type* x, value_type r, size_t = 0, size_t = 0) const
     { *x = r; }
     void _set_result (result_pair_type* x, value_type r, size_t l, size_t = 0) const
@@ -669,27 +751,47 @@ namespace cedar {
     { x->value = r; x->length = l; x->id = from; }
 
 
+	/**
+	 * unlink block "bi" from the list pointed by "head_in"
+	 */
     void _pop_block (const int bi, int& head_in, const bool last) {
       if (last) { // last one poped; Closed or Open
         head_in = 0;
       } else {
         const block& b = _block[bi];
+		// unlink the cur blck from the linked list
+		// cur->prev->next = cur->next
         _block[b.prev].next = b.next;
+		// cur->next->prev = cur->prev
         _block[b.next].prev = b.prev;
-        if (bi == head_in) head_in = b.next;
+		// if unlinked block was head, set head = head->next
+        if (bi == head_in) {
+          head_in = b.next;
+        }
       }
     }
+
+	/**
+	 * insert block "bi" into the doubly linked list starting at "head_out"
+	 */
     void _push_block (const int bi, int& head_out, const bool empty) {
       block& b = _block[bi];
       if (empty) { // the destination is empty
         head_out = b.prev = b.next = bi;
       } else { // use most recently pushed
         int& tail_out = _block[head_out].prev;
+		// cur->prev = tail
         b.prev = tail_out;
+		// cur->next = head
         b.next = head_out;
+		// head = head->prev = tail->next = newly inserted node
         head_out = tail_out = _block[tail_out].next = bi;
       }
     }
+
+	/**
+	 * add a new block of 256 slots
+	 */
     int _add_block () {
       if (_size == _capacity) { // allocate memory if needed
 #if (USE_EXACT_FIT == 1)
@@ -713,13 +815,21 @@ namespace cedar {
       //LOG(INFO) << "realloc new size=" << _size;
       return ArrayToBlock(_size) - 1;
     }
-    // transfer block from one start w/ head_in to one start w/ head_out
+
+	/**
+	 * transfer block starting at head_in to one starting at head_out
+	 * this func will be called in case there are no free slots in current block
+	 * for a new sibling being inserted
+	 */
     void _transfer_block (const int bi, int& head_in, int& head_out) {
 	  VLOG(1) << "transfer bi=" << bi << " from=" << head_in << ",to=" << head_out;
       _pop_block  (bi, head_in, bi == _block[bi].next);
       _push_block (bi, head_out, ! head_out && _block[bi].num);
     }
-    // pop empty node from block; never transfer the special block (bi = 0)
+
+	/**
+	 * pop empty node from block; never transfer the special block (bi = 0)
+	 */
     int _pop_enode (const int base, const uchar label, const int from) {
       const int e  = base < 0 ? _find_place () : base ^ label;
       const int bi = ArrayToBlock(e); // this is modulo 256
@@ -727,14 +837,18 @@ namespace cedar {
       block& b = _block[bi];
       if (--b.num == 0) {
         // no free slots ? transfer a block from Closed to Full
-        if (bi) _transfer_block (bi, _bheadC, _bheadF); 
+        if (bi) {
+          _transfer_block (bi, _bheadC, _bheadF);
+        }
       } else { // release empty node from empty ring
         // n->prev->next = n->next
         _array[-n.base_].check = n.check;
         // n->next->prev = n->prev
         _array[-n.check].base_ = n.base_;
         // if n = head of list, move head = n->next
-        if (e == b.ehead) b.ehead = -n.check; // set ehead
+        if (e == b.ehead) {
+          b.ehead = -n.check; // set ehead
+        }
         if (bi && b.num == 1 && b.trial != MAX_TRIAL) {
           // transfer a block from Open to Closed
           _transfer_block (bi, _bheadO, _bheadC);
@@ -743,7 +857,9 @@ namespace cedar {
       // initialize the released node
 #if (USE_REDUCED_TRIE == 1)
       n.value = CEDAR_VALUE_LIMIT; n.check = from;
-      if (base < 0) _array[from].base_ = - (e ^ label) - 1;
+      if (base < 0) {
+        _array[from].base_ = - (e ^ label) - 1;
+      }
 #else
       if (label) {
 	    n.base_ = -1; 
@@ -759,7 +875,10 @@ namespace cedar {
 	  VLOG(1) << "pop empty node=" << e << ",block=" << bi << ",total=" << b.num;
       return e;
     }
-    // push empty node into empty ring
+
+	/**
+	 * push empty node into empty ring
+	 */
     void _push_enode (const int e) {
       const int bi = ArrayToBlock(e);
       block& b = _block[bi];
@@ -813,13 +932,21 @@ namespace cedar {
 	  *c = label;
 	  VLOG(1) << "push from=" << from << ",base=" << base << ",label=" << label;
     }
-    // pop label from from's child
+
+	/**
+	 * pop label from child of "from"
+	 */
     void _pop_sibling (const size_t from, const int base, const uchar label) {
       uchar* c = &_ninfo[from].child;
-      while (*c != label) c = &_ninfo[base ^ *c].sibling;
+      while (*c != label) {
+	    c = &_ninfo[base ^ *c].sibling;
+      }
       *c = _ninfo[base ^ label].sibling;
     }
-    // check whether to replace branching w/ the newly added node
+
+	/**
+	 * check whether to replace branching w/ the newly added node
+	 */
     bool _consult (const int base_n, const int base_p, uchar c_n, uchar c_p) const {
       do {
 	    c_n = _ninfo[base_n ^ c_n].sibling; 
@@ -827,7 +954,10 @@ namespace cedar {
 	  } while (c_n && c_p);
       return c_p;
     }
-    // enumerate (equal to or more than one) child nodes
+
+	/**
+	 * enumerate (equal to or more than one) child nodes
+	 */
     uchar* _set_child (uchar* p, const int base, uchar c, const int label = -1) {
       --p;
       if (! c)  { *++p = c; c = _ninfo[base ^ c].sibling; } // 0: terminal
@@ -846,7 +976,10 @@ namespace cedar {
       }
       return p;
     }
-    // explore new block to settle down
+
+	/**
+	 * explore new block to settle down
+	 */
     int _find_place () {
       if (_bheadC) return _block[_bheadC].ehead;
       if (_bheadO) return _block[_bheadO].ehead;
@@ -883,7 +1016,10 @@ namespace cedar {
       }
       return _add_block () << 8;
     }
-    // resolve conflict on base_n ^ label_n = base_p ^ label_p
+
+	/**
+	 * resolve conflict on base_n ^ label_n = base_p ^ label_p
+	 */
     template <typename T>
     int _resolve (size_t& from_n, const int base_n, const uchar label_n, T& cf) {
       // examine siblings of conflicted nodes
@@ -903,7 +1039,9 @@ namespace cedar {
       // replace & modify empty list
       const int from  = flag ? static_cast <int> (from_n) : from_p;
       const int base_ = flag ? base_n : base_p;
-      if (flag && *first == label_n) _ninfo[from].child = label_n; // new child
+      if (flag && *first == label_n) {
+        _ninfo[from].child = label_n; // new child
+      }
 #if (USE_REDUCED_TRIE == 1)
       _array[from].base_ = -base - 1; // new base
 #else
@@ -940,12 +1078,16 @@ namespace cedar {
           if (label_n) n_.base_ = -1; else n_.value = value_type (0);
 #endif
           n_.check = static_cast <int> (from_n);
-        } else
+        } else {
           _push_enode (to_);
-        if (NUM_TRACKING_NODES) // keep the traversed node updated
-          for (size_t j = 0; tracking_node[j] != 0; ++j)
-            if (tracking_node[j] == static_cast <size_t> (to_))
-              { tracking_node[j] = static_cast <size_t> (to); break; }
+        }
+        if (NUM_TRACKING_NODES) { // keep the traversed node updated
+          for (size_t j = 0; tracking_node[j] != 0; ++j) {
+            if (tracking_node[j] == static_cast <size_t> (to_)) { 
+			  tracking_node[j] = static_cast <size_t> (to); break;
+            }
+          }
+        }
       }
       return flag ? base ^ label_n : to_pn;
     }
