@@ -222,17 +222,23 @@ namespace cedar {
       }
       return num;
     }
+
 	/**
-	 * walk back the trie from the leaf to the root of trie
-	 *        and fill the passed-in key with the string
-	 * @param to   a leaf node in the trie
-	 * @param key  copy out string stored in trie 
+	 * walk back the Trie from the leaf node to the root of trie
+	 * and extract the string into the 
+	 *
+	 * If you know the length of the string and the leaf slot in
+	 * "_array" where it ends, then you can use this function
+	 * to retrieve the actual string
+	 * 
+	 * @param to       a leaf node in the trie
+	 * @param out_key  copy out the string stored in trie 
 	 */
-    void suffix (char* key, size_t len, size_t to) const {
-      key[len] = '\0';
+    void suffix (char* out_key, size_t len, size_t to) const {
+      out_key[len] = '\0';
       while (len--) {
         const int from = _array[to].check;
-        key[len]
+        out_key[len]
           = static_cast <char> (_array[from].base () ^ static_cast <int> (to));
         to = static_cast <size_t> (from);
       }
@@ -262,12 +268,23 @@ namespace cedar {
       return update (key, from, pos, len, val); 
     }
 
+	/**
+	 * @param from   indicates the last slot in _array where string was placed
+	 * @param len    same as passed in len
+	 */
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val = value_type (0))
     { 
       empty_callback cf; 
       return update (key, from, pos, len, val, cf); 
     }
 
+	/**
+	 * Insert an element into the trie
+     *
+	 * @param from   indicates the last slot in _array where string was placed
+	 * @param len    same as passed in len
+	 * @param cf     callback function which is called when any _array[slot] is moved
+	 */
     template <typename T>
     value_type& update (const char* key, size_t& from, size_t& pos, size_t len, value_type val, T& cf) {
       if (! len && ! from) {
