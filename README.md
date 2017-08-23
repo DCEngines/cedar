@@ -7,4 +7,5 @@ Enhancements done on Yoshinaga's base version
 3. Added comments to code
 4. Reformatted code
 5. Load trie via mmap(2) instead of reading entire trie in memory
+6. move to cmake build system
 
