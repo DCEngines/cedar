@@ -39,6 +39,10 @@ void permute(std::string& str, std::function<void(const std::string&)> callback,
 }
 
 TEST(cderapp, insert_all_permutations) {
+    /*
+     * Given 2 characters in string a and b -- the test adds
+     * a, ab, ba, b in trie
+     */
     std::set<char> characters{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'};
     std::vector<std::string> perm;
 
@@ -62,6 +66,7 @@ TEST(cderapp, insert_all_permutations) {
     {
 	    trie_int_t trie;
 	    for (size_t i = 0; i < nelements; ++i) {
+	    	/* add a string to trie with value as location in vector */
 	    	trie.update(perm[i].c_str(), perm[i].length(), i);
 	    }
 	    EXPECT_EQ(trie.num_keys(), nelements);
@@ -69,13 +74,16 @@ TEST(cderapp, insert_all_permutations) {
 		for (size_t i = 0; i < nelements; ++i) {
 			trie_int_t::result_triple_type r;
 			r = trie.exactMatchSearch<decltype(r)>(perm[i].c_str(), perm[i].length());
+			/* make sure value matches */
 			EXPECT_EQ(r.value, i);
 			EXPECT_EQ(r.length, perm[i].length());
 		}
 	}
 
     {
+    	/* now reverse the vector and rerun the test */
     	std::reverse(perm.begin(), perm.end());
+
 	    trie_int_t trie;
 	    for (size_t i = 0; i < nelements; ++i) {
 	    	trie.update(perm[i].c_str(), perm[i].length(), i);
