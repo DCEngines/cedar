@@ -1,5 +1,96 @@
+#include <vector>
+#include <string>
+#include <functional>
+#include <set>
 
 typedef cedar::da <int> trie_int_t;
+
+template <class S>
+auto powerset(const S& s)
+{
+    std::set<S> ret;
+    ret.emplace();
+    for (auto&& e: s) {
+        std::set<S> rs;
+        for (auto x: ret) {
+            x.insert(e);
+            rs.insert(x);
+        }
+        ret.insert(begin(rs), end(rs));
+    }
+    return ret;
+}
+
+void permute(std::string& str, std::function<void(const std::string&)> callback,
+        size_t first = 0) {
+    if (first == str.size()) {
+        if (callback) {
+            callback(str);
+        }
+        return;
+    }
+
+    for (auto current = first; current < str.size(); ++current) {
+        std::swap(str[first], str[current]);
+        permute(str, callback, first + 1);
+        /* restore original value */
+        std::swap(str[first], str[current]);
+    }
+}
+
+TEST(cderapp, insert_all_permutations) {
+    std::set<char> characters{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'};
+    std::vector<std::string> perm;
+
+    for (auto&& subset : powerset(characters)) {
+        if (subset.empty()) {
+            continue;
+        }
+
+        std::string start;
+        for (auto&& e : subset) {
+            start += e;
+        }
+
+        permute(start, [&perm] (const std::string& str) {
+                perm.emplace_back(str);
+        });
+    }
+
+    auto nelements = perm.size();
+
+    {
+	    trie_int_t trie;
+	    for (size_t i = 0; i < nelements; ++i) {
+	    	trie.update(perm[i].c_str(), perm[i].length(), i);
+	    }
+	    EXPECT_EQ(trie.num_keys(), nelements);
+
+		for (size_t i = 0; i < nelements; ++i) {
+			trie_int_t::result_triple_type r;
+			r = trie.exactMatchSearch<decltype(r)>(perm[i].c_str(), perm[i].length());
+			EXPECT_EQ(r.value, i);
+			EXPECT_EQ(r.length, perm[i].length());
+		}
+	}
+
+    {
+    	std::reverse(perm.begin(), perm.end());
+	    trie_int_t trie;
+	    for (size_t i = 0; i < nelements; ++i) {
+	    	trie.update(perm[i].c_str(), perm[i].length(), i);
+	    }
+	    EXPECT_EQ(trie.num_keys(), nelements);
+
+		for (size_t i = 0; i < nelements; ++i) {
+			trie_int_t::result_triple_type r;
+			r = trie.exactMatchSearch<decltype(r)>(perm[i].c_str(), perm[i].length());
+			EXPECT_EQ(r.value, i);
+			EXPECT_EQ(r.length, perm[i].length());
+		}
+	}
+}
+
 /**
  */
 TEST(cedarpp, match_and_predict) {
