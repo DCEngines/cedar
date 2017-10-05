@@ -1,0 +1,255 @@
+struct node {
+	int base;
+	int check;
+};
+
+- struct node keeps the state transitions
+	- base is pointer to next state
+	- check is pointer to parent
+
+- struct node array[]
+	- keeps all state transitions
+	- node->base or node->check are indexes into node array
+	- During key lookup involves going through this array[]
+		- lookup does not use other DSs like block and ninfo
+
+- block and nlinks (or ninfo) are only used for efficient updates
+
+- struct ninfo {
+	uchar child;
+	uchar sibling;
+};
+	- child is label of first child
+	- sibling is label of first sibling of child
+
+For example:
+    // 
+    // Given   a -> b -> c -> d
+    //              |
+    //               --> p -> q
+    //              |
+    //               --> x -> y
+    // 
+    // ninfo[slot_c].child = 'd'
+    // ninfo[slot_c].sibling = 'p'
+    // ninfo[slot_p].sibling = 'x'
+    // ninfo[slot_x].sibling = '0'
+
+
+- A block contain entries of 256 nodes
+- A block is either full, close, or open
+	- full block has no empty slot
+	- close block has exactly on empty slot
+	- open block has many empty slots
+- double array trie maintains three lists of blocks
+	- list of open blocks _blockO
+	- list of full blocks _blockF
+	- list of closed blocks _blockC
+
+
+
+
+- State transition always starts with 0
+For example: if two strings "a", "ab", "abc", and "abcd" are added
+a) after a is added trie will look like
+	0 --- a ---> 97 --- 0 ---> 256
+
+- Since, 0 ^(XOR) 'a' = 97 therefore, 0 --- a ---> 97
+- 256 is not calculated based on XOR rule
+	- it is a first empty slot in block 1
+- at this point
+	ninfo[97].child = 0
+	ninfo[97].sibling = 0
+
+	ninfo[256].child = 0
+	ninfo[256].siblink = 0
+
+
+b) after ab is added trie will look like
+	0 --- a ---> 97 --- 0 ---> 256
+                      |
+                      |---- b ---> 354 --- 0 ---> 257
+
+
+- 256 ^ 'b' = 354
+- 257 is next unused slot in block 1
+
+	ninfo[97].child = 0
+	ninfo[97].sibling = 0
+
+	ninfo[256].child = 0
+	ninfo[256].sibling = b
+
+	ninfo[354].child = 0
+	ninfo[354].sibling = 0
+
+	ninfo[257].child = 0
+	ninfo[257].sibling = 0
+
+
+c) after abc is added trie will look like
+	0 --- a ---> 97 --- 0 ---> 256
+                      |
+                      |---- b ---> 354 --- 0 ---> 258
+                                    |
+                                    |  --- c ---> 353 --- 0 ---> 259
+
+- from diagram(b) node c should be added as sibling to node 257.
+However, 257 ^ 'c' = 354 and node 354 is already occupied
+
+- trie goes through resolve procedure to relocate existing states. At the moment, situation can easily be resolved by modifying 
+
+354 --- 0 ---> 257
+
+    To
+
+354 --- 0 ---> 258
+
+
+Now, 258 ^ 'c' = 353
+- 259 is next unused slot in block 1
+
+
+	(gdb) p _ninfo[97]
+	$33 = {sibling = 0 '\000', child = 0 '\000'}
+	(gdb) p _ninfo[256]
+	$34 = {sibling = 98 'b', child = 0 '\000'}
+	(gdb) p _ninfo[354]
+	$35 = {sibling = 0 '\000', child = 0 '\000'}
+	(gdb) p _ninfo[258]
+	$36 = {sibling = 99 'c', child = 0 '\000'}
+	(gdb) p _ninfo[353]
+	$37 = {sibling = 0 '\000', child = 0 '\000'}
+	(gdb) p _ninfo[259]
+	$38 = {sibling = 0 '\000', child = 0 '\000'}
+
+
+
+d) after adding "abcd"
+
+	0 --- a ---> 97 --- 0 ---> 256
+                      |
+                      |---- b ---> 354 --- 0 ---> 258
+                                    |
+                                    |  --- c ---> 353 --- 0 ---> 259
+                                                   |
+                                                   |  --- d ---> 359 --- 0 ---> 257
+
+
+
+(gdb) p _array[0]
+$43 = {{base_ = 0, value = 0}, check = -1}
+
+(gdb) p _array[97]
+$44 = {{base_ = 256, value = 256}, check = 0}
+
+- base_ is child of 97
+
+(gdb) p _array[256]
+$45 = {{base_ = 0, value = 0}, check = 97}
+
+- stored value 0 here
+	
+(gdb) p _ninfo[256]
+$46 = {sibling = 98 'b', child = 0 '\000'}
+
+- now look at sibling of 256 which is 98 or 'b'
+
+(gdb) p 256 ^ 'b'
+$47 = 354
+
+- node for 'b' is 354
+
+(gdb) p _array[354]
+$48 = {{base_ = 258, value = 258}, check = 97}
+
+- child of 354 is 258 (parent is 97)
+
+(gdb) p _array[258]
+$49 = {{base_ = 1, value = 1}, check = 354}
+
+
+- 258 is leaf node, value 1 is stored with key "ab"
+
+(gdb) p _ninfo[258]
+$50 = {sibling = 99 'c', child = 0 '\000'}
+(gdb) p 258 ^ 'c'
+$51 = 353
+
+- sibling of 258 is 353
+
+(gdb) p _array[353]
+$52 = {{base_ = 259, value = 259}, check = 354}
+(gdb) p _array[259]
+$53 = {{base_ = 2, value = 2}, check = 353}
+
+- 259 is leaf node, value of 2 is stored with key "abc"
+
+(gdb) p _ninfo[259]
+$54 = {sibling = 100 'd', child = 0 '\000'}
+(gdb) p 259 ^ 100
+$55 = 359
+(gdb) p _array[359]
+$56 = {{base_ = 257, value = 257}, check = 353}
+(gdb) p _array[257]
+$57 = {{base_ = 3, value = 3}, check = 359}
+(gdb) 
+
+- 257 is leaf node, value 3 is stored with "abcd"
+
+
+(gdb) p _ninfo[0]
+$58 = {sibling = 97 'a', child = 0 '\000'}
+(gdb) p _ninfo[97]
+$59 = {sibling = 0 '\000', child = 0 '\000'}
+(gdb) p _ninfo[256]
+$60 = {sibling = 98 'b', child = 0 '\000'}
+(gdb) p _ninfo[354]
+$61 = {sibling = 0 '\000', child = 0 '\000'}
+(gdb) p _ninfo[258]
+$62 = {sibling = 99 'c', child = 0 '\000'}
+(gdb) p _ninfo[353]
+$63 = {sibling = 0 '\000', child = 0 '\000'}
+(gdb) p _ninfo[259]
+$64 = {sibling = 100 'd', child = 0 '\000'}
+(gdb) p _ninfo[359]
+$65 = {sibling = 0 '\000', child = 0 '\000'}
+(gdb) p _ninfo[257]
+$66 = {sibling = 0 '\000', child = 0 '\000'}
+
+
+
+
+BLOCK DS
+========
+- only useful during updates.
+
+    struct block { // a block w/ 256 elements
+      int   prev{0};   // prev block
+      int   next{0};   // next block
+      short num{256};    // # empty elements; 0 - 256
+      short reject{257}; // minimum # branching failed to locate; soft limit
+      int   trial{0};  // # trial
+      int   ehead{0};  // first empty item
+    };
+
+- A string in Cedar is added character after character. Each character in the string causes state transition. Every state is represented by node DS introduced earlier. Cedar maintains array of such nodes. At the start, Cedar begins with node array of 256 entries. When more strings are added, the initial 256 nodes are sufficient, therefore the node array is reallocated. For every, 256 nodes Cedar maintains BLOCK DS.
+
+- All the blocks are maintains in an array ---> struct block *_block{};
+- BLOCK DS is useful in efficiently describing which nodes in allocated array are free.
+- BLOCK 1 is used to manage free entries struct node array[0]   to array[255]
+- BLOCK 2 is used to manage free entries struct node array[256] to array[511]
+
+- Cedar maintains 3 types of blocks
+	- full -- when no struct node in this block is free
+	- closed -- when only one struct node in a block is free
+	- open -- otherwise
+	- _bheadF -- maintains list of full blocks
+	- _bheadC -- maintains list of all closed blocks
+	- _bheadO -- list of all open blocks
+
+- struct block->prev and block->next used to maintain list
+- struct block->num -- number of free nodes in this block
+- struct block->ehead -- index of first free node in this block
+
+
