@@ -18,11 +18,3 @@ add_test(cedar_tests
 	cedar_test 
 	cedarpp_test 
 	)
-
-add_executable(enron_benchmark
-	enroc.cc
-)
-
-target_link_libraries(enron_benchmark
-	${LIBRARY_LIST}
-)
