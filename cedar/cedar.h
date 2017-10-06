@@ -124,6 +124,14 @@ namespace cedar {
         }
       return i;
     }
+
+	size_t all_combined_size() const {
+		size_t sz = total_size();
+		sz += sizeof(ninfo) * capacity();
+		sz += sizeof(block) * ArrayToBlock(capacity());
+		return sz;
+	}
+
     size_t num_keys () const {
       size_t i = 0;
       for (int to = 0; to < _size; ++to) {
