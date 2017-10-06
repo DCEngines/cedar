@@ -7,3 +7,11 @@ include_directories(${PROJECT_SOURCE_DIR}/cedar)
 
 #add_executable(bench_static bench_static.cc)
 #target_link_libraries(bench_static ${LIBRARY_LIST})
+
+add_executable(enron_benchmark
+	enron.cc
+)
+
+target_link_libraries(enron_benchmark
+	${LIBRARY_LIST}
+)
